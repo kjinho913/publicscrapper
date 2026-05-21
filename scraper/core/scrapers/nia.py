@@ -38,6 +38,7 @@ SEL_FILES      = "a[href*='/common/board/Download.do']"
 
 class NiaScraper(BaseScraper):
     SOURCE_NAME = "NIA"
+    USE_PLAYWRIGHT_FOR_DETAIL = True
 
     def __init__(self, config: dict):
         super().__init__(config)
@@ -119,13 +120,10 @@ class NiaScraper(BaseScraper):
         url = announcement.get("공고링크", "")
         if not url:
             return announcement
-        try:
-            resp = self._get(url)
-        except Exception as exc:
-            logger.warning("[NIA] 상세 페이지 실패 %s: %s", url, exc)
+        html = self._get_detail_html(url)
+        if not html:
             return announcement
-
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup = BeautifulSoup(html, "lxml")
 
         content_el = soup.select_one(".view_content, .board_content, .bbs-content")
         if content_el:

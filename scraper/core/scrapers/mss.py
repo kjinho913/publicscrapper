@@ -42,6 +42,7 @@ SEL_FILES      = "a[href*='/common/board/Download.do']"
 
 class MssScraper(BaseScraper):
     SOURCE_NAME = "중소벤처기업부"
+    USE_PLAYWRIGHT_FOR_DETAIL = True
 
     def __init__(self, config: dict):
         super().__init__(config)
@@ -119,13 +120,10 @@ class MssScraper(BaseScraper):
         url = announcement.get("공고링크", "")
         if not url:
             return announcement
-        try:
-            resp = self._get(url)
-        except Exception as exc:
-            logger.warning("[MSS] 상세 페이지 실패 %s: %s", url, exc)
+        html = self._get_detail_html(url)
+        if not html:
             return announcement
-
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup = BeautifulSoup(html, "lxml")
 
         content_el = soup.select_one(SEL_CONTENT)
         if content_el:

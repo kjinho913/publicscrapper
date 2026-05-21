@@ -33,6 +33,7 @@ MAX_PAGES = 10   # 최대 1,000건
 
 class G2bScraper(BaseScraper):
     SOURCE_NAME = "나라장터"
+    USE_PLAYWRIGHT_FOR_DETAIL = True
 
     def __init__(self, config: dict):
         super().__init__(config)
@@ -152,18 +153,26 @@ class G2bScraper(BaseScraper):
         return ann
 
     def fetch_detail(self, announcement: dict) -> dict:
-        # G2B API는 이미 상세 정보를 제공하므로
-        # 첨부파일 URL은 상세 페이지 HTML에서 추출
+        # G2B 상세 페이지는 frameset 구조 — Playwright로 내부 frame HTML 추출
         url = announcement.get("공고링크", "")
         if not url:
             return announcement
         try:
-            resp = self._get(url)
             from bs4 import BeautifulSoup
-            soup = BeautifulSoup(resp.text, "lxml")
-            for a in soup.select("a[href*='download'], a[href*='fileDown'], .atch a"):
+            if self.playwright_browser is not None:
+                # frameTgong.do 가 src에 포함된 frame의 HTML을 가져온다
+                html = self.playwright_browser.get_frame_html(url, "frameTgong")
+            else:
+                resp = self._get(url)
+                html = resp.text
+            if not html:
+                return announcement
+            soup = BeautifulSoup(html, "lxml")
+            for a in soup.select(
+                "a[href*='download'], a[href*='fileDown'], a[href*='Down'], .atch a"
+            ):
                 href = a.get("href", "")
-                if href:
+                if href and not href.startswith("javascript"):
                     announcement["_attachment_urls"].append(
                         urljoin("https://www.g2b.go.kr", href)
                     )

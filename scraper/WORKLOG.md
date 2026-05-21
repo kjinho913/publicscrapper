@@ -4,6 +4,16 @@
 _None_
 
 ## Completed
+[2026-05-21] Playwright 전환 구현
+- Step 1: requirements.txt playwright 추가: done
+- Step 2: core/playwright_helper.py 신규 작성: done
+- Step 3: core/scrapers/base.py 확장 (USE_PLAYWRIGHT_FOR_DETAIL, _get_detail_html): done
+- Step 4: core/runner.py PlaywrightBrowser 관리 추가: done
+- Step 5: nipa/mss/nia fetch_detail → _get_detail_html 사용: done
+- Step 6: g2b fetch_detail → get_frame_html 사용: done
+- Step 7: etri fetch_detail 신규 구현 → post_html 사용: done
+- Step 8: 테스트 (nia, nipa): done
+- Step 9: 커밋 및 푸시: done
 [2026-05-21] NIA 3개 버그 수정
 - Step 1: excel_writer.py — save_announcements 배치 내 중복 제거: done
 - Step 2: nia.py — fetch_list 페이지 반복 감지 시 중단: done
@@ -47,6 +57,7 @@ _Nothing queued_
 
 ---
 <!-- session log below — newest entries at top -->
+[2026-05-21] Playwright 전환 완료. NIA/NIPA 테스트 통과 (Playwright 브라우저 정상 시작·종료, 첨부파일 수집 확인).
 [2026-05-21] NIA 버그 3건 수정: 페이지네이션 반복 감지, 배치 내 중복 제거, URL 중복 제거. 수집 50→10건, Excel 40→8건으로 정상화.
 [2026-05-21] 이미 수집한 공고 첨부파일 재다운로드 방지 구현. Excel 기존 키 기반 건너뜀.
 [2026-05-21] output 폴더 구조 변경. attachments/<site>/<공고번호> → <site>/<YYYY-MM-DD> 로 단순화.

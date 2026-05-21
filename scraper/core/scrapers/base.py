@@ -68,6 +68,9 @@ class BaseScraper(ABC):
 
     SOURCE_NAME: str = ""  # 서브클래스에서 반드시 오버라이드
 
+    # True로 설정하면 runner.py가 PlaywrightBrowser를 생성해 주입한다.
+    USE_PLAYWRIGHT_FOR_DETAIL: bool = False
+
     def __init__(self, config: dict):
         self.config = config
         req_cfg = config.get("request", {})
@@ -75,6 +78,8 @@ class BaseScraper(ABC):
         self.delay_min = req_cfg.get("delay_min", 1.0)
         self.delay_max = req_cfg.get("delay_max", 3.0)
         self.session = self._build_session(req_cfg.get("max_retries", 3))
+        # runner.py에서 USE_PLAYWRIGHT_FOR_DETAIL=True일 때 주입된다.
+        self.playwright_browser = None
 
     # ------------------------------------------------------------------
     # 추상 메서드 — 서브클래스 구현 필수
@@ -136,6 +141,28 @@ class BaseScraper(ABC):
     # ------------------------------------------------------------------
     # 내부 헬퍼
     # ------------------------------------------------------------------
+
+    def _get_detail_html(self, url: str) -> str:
+        """
+        상세 페이지 HTML을 반환한다.
+        USE_PLAYWRIGHT_FOR_DETAIL=True이고 playwright_browser가 주입되어 있으면
+        Playwright로 JS 렌더링 후 반환하고, 아니면 requests를 사용한다.
+        """
+        if self.USE_PLAYWRIGHT_FOR_DETAIL and self.playwright_browser is not None:
+            html = self.playwright_browser.get_html(url)
+            if not html:
+                logger.warning(
+                    "[%s] Playwright 상세 페이지 빈 응답: %s", self.SOURCE_NAME, url
+                )
+            return html
+        try:
+            resp = self._get(url)
+            return resp.text
+        except Exception as exc:
+            logger.warning(
+                "[%s] 상세 페이지 요청 실패 %s: %s", self.SOURCE_NAME, url, exc
+            )
+            return ""
 
     def _get(self, url: str, **kwargs) -> requests.Response:
         """공용 GET 요청. 응답 인코딩을 자동으로 감지한다."""

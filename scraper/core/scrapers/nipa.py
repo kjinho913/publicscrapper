@@ -46,6 +46,7 @@ SEL_FILES      = "a[href*='/comm/getFile']"
 
 class NipaScraper(BaseScraper):
     SOURCE_NAME = "NIPA"
+    USE_PLAYWRIGHT_FOR_DETAIL = True
 
     def __init__(self, config: dict):
         super().__init__(config)
@@ -134,13 +135,10 @@ class NipaScraper(BaseScraper):
         url = announcement.get("공고링크", "")
         if not url:
             return announcement
-        try:
-            resp = self._get(url)
-        except Exception as exc:
-            logger.warning("[NIPA] 상세 페이지 요청 실패 %s: %s", url, exc)
+        html = self._get_detail_html(url)
+        if not html:
             return announcement
-
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup = BeautifulSoup(html, "lxml")
 
         # 내용 요약
         content_el = soup.select_one(SEL_CONTENT)

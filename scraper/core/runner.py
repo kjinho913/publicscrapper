@@ -18,6 +18,12 @@ from core.excel_writer import get_existing_announcement_keys
 from core.filters import matches
 from core.scrapers import NipaScraper, MssScraper, G2bScraper, NiaScraper, EtriScraper
 
+try:
+    from core.playwright_helper import PlaywrightBrowser as _PlaywrightBrowser
+    _PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    _PLAYWRIGHT_AVAILABLE = False
+
 _SCRAPER_MAP = {
     "nipa": NipaScraper,
     "mss":  MssScraper,
@@ -87,47 +93,68 @@ def run_site(site_key: str, config: dict) -> tuple[list[dict], dict]:
     source = scraper.SOURCE_NAME
     stat = {"사이트": source, "수집": 0, "필터": 0, "첨부": 0, "오류": False}
 
+    # Playwright 초기화 (JS 렌더링이 필요한 스크래퍼)
+    pw = None
+    if getattr(cls, "USE_PLAYWRIGHT_FOR_DETAIL", False) and _PLAYWRIGHT_AVAILABLE:
+        pw = _PlaywrightBrowser()
+        pw.__enter__()
+        scraper.playwright_browser = pw
+        logger.info("[%s] Playwright 브라우저 시작", source)
+
     try:
-        announcements = scraper.get_announcements()
-    except Exception as exc:
-        logger.error("[%s] 수집 중 예외: %s", source, exc)
-        stat["오류"] = True
-        return [], stat
+        try:
+            announcements = scraper.get_announcements()
+        except Exception as exc:
+            logger.error("[%s] 수집 중 예외: %s", source, exc)
+            stat["오류"] = True
+            return [], stat
 
-    stat["수집"] = len(announcements)
-    filtered = [a for a in announcements if matches(a, filter_cfg)]
-    stat["필터"] = len(filtered)
-    logger.info("[%s] 수집 %d건 → 필터 후 %d건", source, len(announcements), len(filtered))
+        # Playwright 쿠키를 requests session에 동기화 (다운로드 전)
+        if pw is not None:
+            pw.sync_cookies_to_session(scraper.session)
 
-    if att_enabled:
-        existing_keys = get_existing_announcement_keys(config)
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        for ann in filtered:
-            if (str(ann.get("공고번호", "")), str(ann.get("출처사이트", ""))) in existing_keys:
+        stat["수집"] = len(announcements)
+        filtered = [a for a in announcements if matches(a, filter_cfg)]
+        stat["필터"] = len(filtered)
+        logger.info("[%s] 수집 %d건 → 필터 후 %d건", source, len(announcements), len(filtered))
+
+        if att_enabled:
+            existing_keys = get_existing_announcement_keys(config)
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            for ann in filtered:
+                if (str(ann.get("공고번호", "")), str(ann.get("출처사이트", ""))) in existing_keys:
+                    ann.pop("_attachment_urls", None)
+                    continue
+                urls = list(dict.fromkeys(
+                    u for u in ann.pop("_attachment_urls", [])
+                    if u and not u.startswith("javascript")
+                ))
+                if not urls:
+                    continue
+                dest = att_base_dir / source / date_str
+                count = download_attachments(
+                    urls=urls,
+                    dest_dir=dest,
+                    session=scraper.session,
+                    allowed_extensions=allowed_ext,
+                    max_mb=max_mb,
+                )
+                ann["첨부파일수"] = count
+                ann["첨부파일경로"] = str(dest.resolve()) if count > 0 else ""
+                stat["첨부"] += count
+        else:
+            for ann in filtered:
                 ann.pop("_attachment_urls", None)
-                continue
-            urls = list(dict.fromkeys(
-                u for u in ann.pop("_attachment_urls", [])
-                if u and not u.startswith("javascript")
-            ))
-            if not urls:
-                continue
-            dest = att_base_dir / source / date_str
-            count = download_attachments(
-                urls=urls,
-                dest_dir=dest,
-                session=scraper.session,
-                allowed_extensions=allowed_ext,
-                max_mb=max_mb,
-            )
-            ann["첨부파일수"] = count
-            ann["첨부파일경로"] = str(dest.resolve()) if count > 0 else ""
-            stat["첨부"] += count
-    else:
-        for ann in filtered:
-            ann.pop("_attachment_urls", None)
 
-    return filtered, stat
+        return filtered, stat
+
+    finally:
+        if pw is not None:
+            try:
+                pw.__exit__(None, None, None)
+                logger.info("[%s] Playwright 브라우저 종료", source)
+            except Exception as exc:
+                logger.debug("[%s] Playwright 종료 오류: %s", source, exc)
 
 
 def save_tmp_json(site_key: str, announcements: list[dict], tmp_dir: Path) -> None:

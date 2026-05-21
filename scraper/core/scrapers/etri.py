@@ -9,6 +9,7 @@ python main.py --debug-etri 명령으로 원본 HTML 확인 가능.
 
 import logging
 import re
+from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
@@ -16,8 +17,9 @@ from .base import BaseScraper, make_empty_announcement
 
 logger = logging.getLogger(__name__)
 
-BASE_URL  = "https://ebid.etri.re.kr"
-LIST_URL  = "https://ebid.etri.re.kr/ebid/ebid/nSsEbidbulletinListPopup.do"
+BASE_URL   = "https://ebid.etri.re.kr"
+LIST_URL   = "https://ebid.etri.re.kr/ebid/ebid/nSsEbidbulletinListPopup.do"
+DETAIL_URL = "https://ebid.etri.re.kr/ebid/ebid/nSsEbidInfoMainViewPopup.do"
 PAGE_PARAM = "pageNo"
 MAX_PAGES  = 5
 SEL_ROWS   = "table tbody tr"
@@ -25,6 +27,7 @@ SEL_ROWS   = "table tbody tr"
 
 class EtriScraper(BaseScraper):
     SOURCE_NAME = "ETRI"
+    USE_PLAYWRIGHT_FOR_DETAIL = True
 
     def __init__(self, config: dict):
         super().__init__(config)
@@ -89,14 +92,28 @@ class EtriScraper(BaseScraper):
         deadline = tds[4].get_text(strip=True) if len(tds) > 4 else ""
         ann["마감일시"] = deadline if deadline != "~" else ""
 
-        # 상세 URL은 POST 팝업이므로 목록 URL로 대체
-        ann["공고링크"] = self._list_url
+        # 상세 페이지는 POST 팝업 — 참조용 URL 설정
+        ann["공고링크"] = f"{DETAIL_URL}?biNo={bid_no}" if bid_no else self._list_url
 
         return ann
 
     def fetch_detail(self, announcement: dict) -> dict:
-        # 상세 페이지는 POST 팝업(nSsEbidInfoMainViewPopup.do)으로만 접근 가능
-        # 첨부파일 수집 불가 → 목록 정보만 사용
+        bid_no = announcement.get("공고번호", "")
+        if not bid_no or self.playwright_browser is None:
+            return announcement
+        html = self.playwright_browser.post_html(DETAIL_URL, {"biNo": bid_no})
+        if not html:
+            return announcement
+        soup = BeautifulSoup(html, "lxml")
+        # 첨부파일 링크 추출
+        for a in soup.select("a[href*='download'], a[href*='Down'], a[href*='file']"):
+            href = a.get("href", "")
+            if href and not href.startswith("javascript"):
+                announcement["_attachment_urls"].append(urljoin(BASE_URL, href))
+        # 내용 요약
+        content_el = soup.select_one(".view_content, .bbs-content, table.tbl_view td")
+        if content_el:
+            announcement["내용요약"] = self._truncate(content_el.get_text(" ", strip=True))
         return announcement
 
     def debug_html(self):
