@@ -120,9 +120,18 @@ def save_announcements(
         _write_header(ws)
         existing_keys: set[tuple] = set()
 
-    # 신규 공고만 필터링
+    # 배치 내 중복 제거 (공고번호+출처사이트 기준, 첫 번째 항목 유지)
+    seen_in_batch: set[tuple] = set()
+    deduped: list[dict] = []
+    for ann in announcements:
+        k = (ann.get("공고번호", ""), ann.get("출처사이트", ""))
+        if k not in seen_in_batch:
+            seen_in_batch.add(k)
+            deduped.append(ann)
+
+    # 기존 Excel 항목과 중복 제거
     new_rows = [
-        ann for ann in announcements
+        ann for ann in deduped
         if (ann.get("공고번호", ""), ann.get("출처사이트", "")) not in existing_keys
     ]
 

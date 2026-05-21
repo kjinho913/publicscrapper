@@ -106,10 +106,10 @@ def run_site(site_key: str, config: dict) -> tuple[list[dict], dict]:
             if (str(ann.get("공고번호", "")), str(ann.get("출처사이트", ""))) in existing_keys:
                 ann.pop("_attachment_urls", None)
                 continue
-            urls = [
+            urls = list(dict.fromkeys(
                 u for u in ann.pop("_attachment_urls", [])
                 if u and not u.startswith("javascript")
-            ]
+            ))
             if not urls:
                 continue
             dest = att_base_dir / source / date_str

@@ -48,10 +48,19 @@ class NiaScraper(BaseScraper):
 
     def fetch_list(self) -> list[dict]:
         results: list[dict] = []
+        seen_ids: set[str] = set()
         for page in range(1, self._max_pages + 1):
             items, has_next = self._fetch_page(page)
-            results.extend(items)
-            if not has_next or not items:
+            if not items:
+                break
+            new_items = [a for a in items if a.get("공고번호", "") not in seen_ids]
+            if not new_items:
+                logger.info("[NIA] 페이지 %d — 새 항목 없음, 페이지네이션 종료", page)
+                break
+            for a in new_items:
+                seen_ids.add(a.get("공고번호", ""))
+            results.extend(new_items)
+            if not has_next:
                 break
             self._sleep()
         return results

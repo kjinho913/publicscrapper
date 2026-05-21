@@ -4,6 +4,12 @@
 _None_
 
 ## Completed
+[2026-05-21] NIA 3개 버그 수정
+- Step 1: excel_writer.py — save_announcements 배치 내 중복 제거: done
+- Step 2: nia.py — fetch_list 페이지 반복 감지 시 중단: done
+- Step 3: runner.py — _attachment_urls URL 중복 제거: done
+- Step 4: 커밋 및 푸시: done
+- 잔존 이슈: NIA 일부 공고(29410, 29408 등) 파일 목록 AJAX 지연로딩 → 정적 HTML 수집 시 누락
 [2026-05-21] 이미 수집한 공고의 첨부파일 재다운로드 방지
 - Step 1: excel_writer.py — get_existing_announcement_keys() 함수 추가: done
 - Step 2: runner.py — 첨부파일 루프에서 기존 공고 건너뜀 로직 추가: done
@@ -41,6 +47,7 @@ _Nothing queued_
 
 ---
 <!-- session log below — newest entries at top -->
+[2026-05-21] NIA 버그 3건 수정: 페이지네이션 반복 감지, 배치 내 중복 제거, URL 중복 제거. 수집 50→10건, Excel 40→8건으로 정상화.
 [2026-05-21] 이미 수집한 공고 첨부파일 재다운로드 방지 구현. Excel 기존 키 기반 건너뜀.
 [2026-05-21] output 폴더 구조 변경. attachments/<site>/<공고번호> → <site>/<YYYY-MM-DD> 로 단순화.
 [2026-05-21] 디렉토리 구조 재설계 완료. app/ + scrapers/ → core/ 통합, main.py 단일 진입점으로 재작성.
