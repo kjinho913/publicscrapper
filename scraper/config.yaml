@@ -22,7 +22,7 @@ filters:
 
 attachments:
   enabled: true
-  download_dir: "./output/attachments"
+  download_dir: "./output"
   allowed_extensions:
     - ".pdf"
     - ".hwp"

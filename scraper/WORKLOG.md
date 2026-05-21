@@ -4,6 +4,10 @@
 _None_
 
 ## Completed
+[2026-05-21] output 폴더 구조 변경 (attachments/<site>/<공고번호> → <site>/<날짜>)
+- Step 1: config.yaml download_dir 수정 (./output/attachments → ./output): done
+- Step 2: runner.py dest 경로를 att_base_dir/source/YYYY-MM-DD 로 변경: done
+- Step 3: WORKLOG.md 완료 처리 및 커밋: done
 [2026-05-21] 디렉토리 구조 재설계 (app/ + scrapers/ → core/)
 - Step 1: core/ 패키지 생성 (내용 무변경 파일 복사): done
 - Step 2: core/runner.py 작성 (app/site_runner.py import 수정): done
@@ -33,6 +37,7 @@ _Nothing queued_
 
 ---
 <!-- session log below — newest entries at top -->
+[2026-05-21] output 폴더 구조 변경. attachments/<site>/<공고번호> → <site>/<YYYY-MM-DD> 로 단순화.
 [2026-05-21] 디렉토리 구조 재설계 완료. app/ + scrapers/ → core/ 통합, main.py 단일 진입점으로 재작성.
 [2026-05-19] 7-Step 개선 계획 수립. Step 1 시작.
 [2026-05-19] 세션 재개. 오류 분석 완료, 수정 단계 진행 중.

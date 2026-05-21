@@ -106,7 +106,7 @@ def run_site(site_key: str, config: dict) -> tuple[list[dict], dict]:
             ]
             if not urls:
                 continue
-            dest = att_base_dir / source / _safe_dirname(ann.get("공고번호", "unknown"))
+            dest = att_base_dir / source / datetime.now().strftime("%Y-%m-%d")
             count = download_attachments(
                 urls=urls,
                 dest_dir=dest,
