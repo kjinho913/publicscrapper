@@ -71,7 +71,7 @@ class PlaywrightBrowser:
         page = self._ctx.new_page()
         try:
             page.goto(url, wait_until="networkidle")
-            for frame in page.frames():
+            for frame in page.frames:
                 if frame_url_fragment in (frame.url or ""):
                     return frame.content()
             return page.content()

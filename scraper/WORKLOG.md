@@ -3,7 +3,15 @@
 ## Current Task
 _None_
 
+
+
 ## Completed
+[2026-05-21] G2B/ETRI Playwright 버그 수정
+- Step 1: playwright_helper.py — page.frames() → page.frames (property): done
+- Step 2: etri.py — _fetch_page() 목록 수집을 playwright_browser.post_html()로 전환: done
+- Step 3: G2B 테스트 (100건 수집 / 67건 필터): done
+- Step 4: ETRI 테스트 (10건 수집 / 타임아웃 해소): done
+- Step 5: 커밋 및 푸시: done
 [2026-05-21] Playwright 전환 구현
 - Step 1: requirements.txt playwright 추가: done
 - Step 2: core/playwright_helper.py 신규 작성: done
@@ -57,6 +65,7 @@ _Nothing queued_
 
 ---
 <!-- session log below — newest entries at top -->
+[2026-05-21] G2B/ETRI 버그 수정. G2B: page.frames() → page.frames. ETRI: 목록 수집 Playwright post_html 전환으로 타임아웃 해소. G2B 100건/67건, ETRI 10건 수집 확인.
 [2026-05-21] Playwright 전환 완료. NIA/NIPA 테스트 통과 (Playwright 브라우저 정상 시작·종료, 첨부파일 수집 확인).
 [2026-05-21] NIA 버그 3건 수정: 페이지네이션 반복 감지, 배치 내 중복 제거, URL 중복 제거. 수집 50→10건, Excel 40→8건으로 정상화.
 [2026-05-21] 이미 수집한 공고 첨부파일 재다운로드 방지 구현. Excel 기존 키 기반 건너뜀.

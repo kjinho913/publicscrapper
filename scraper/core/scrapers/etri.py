@@ -48,15 +48,22 @@ class EtriScraper(BaseScraper):
 
     def _fetch_page(self, page: int) -> tuple[list[dict], bool]:
         data = {self._page_param: page, "biNo": "", "pageLine": 10}
-        try:
-            resp = self.session.post(self._list_url, data=data, timeout=self.timeout)
-            resp.raise_for_status()
-            resp.encoding = "euc-kr"
-        except Exception as exc:
-            logger.error("[ETRI] 목록 페이지 %d 실패: %s", page, exc)
-            return [], False
+        if self.playwright_browser is not None:
+            html = self.playwright_browser.post_html(self._list_url, data)
+            if not html:
+                logger.error("[ETRI] 목록 페이지 %d 실패: Playwright post_html 반환값 없음", page)
+                return [], False
+        else:
+            try:
+                resp = self.session.post(self._list_url, data=data, timeout=self.timeout)
+                resp.raise_for_status()
+                resp.encoding = "euc-kr"
+                html = resp.text
+            except Exception as exc:
+                logger.error("[ETRI] 목록 페이지 %d 실패: %s", page, exc)
+                return [], False
 
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup = BeautifulSoup(html, "lxml")
         rows = soup.select(SEL_ROWS)
         if not rows:
             logger.warning("[ETRI] 목록 행을 찾지 못했습니다. HTML:\n%s", soup.prettify()[:2000])
@@ -118,6 +125,10 @@ class EtriScraper(BaseScraper):
 
     def debug_html(self):
         data = {self._page_param: 1, "biNo": "", "pageLine": 10}
-        resp = self.session.post(self._list_url, data=data, timeout=self.timeout)
-        resp.encoding = "euc-kr"
-        print(f"\n=== ETRI 목록 페이지 HTML ===\n{resp.text[:5000]}")
+        if self.playwright_browser is not None:
+            html = self.playwright_browser.post_html(self._list_url, data)
+        else:
+            resp = self.session.post(self._list_url, data=data, timeout=self.timeout)
+            resp.encoding = "euc-kr"
+            html = resp.text
+        print(f"\n=== ETRI 목록 페이지 HTML ===\n{html[:5000]}")
