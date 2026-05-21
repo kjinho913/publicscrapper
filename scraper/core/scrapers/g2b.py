@@ -19,7 +19,6 @@ import logging
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
-from urllib.parse import urljoin
 
 from .base import BaseScraper, make_empty_announcement
 
@@ -33,7 +32,8 @@ MAX_PAGES = 10   # 최대 1,000건
 
 class G2bScraper(BaseScraper):
     SOURCE_NAME = "나라장터"
-    USE_PLAYWRIGHT_FOR_DETAIL = True
+    USE_PLAYWRIGHT_FOR_DETAIL = False
+    FETCH_DETAIL = False  # 첨부파일·링크 모두 API 응답에서 직접 수집
 
     def __init__(self, config: dict):
         super().__init__(config)
@@ -141,8 +141,14 @@ class G2bScraper(BaseScraper):
             except ValueError:
                 ann["예산금액"] = budget
 
-        # 공고 링크 (나라장터 상세 페이지)
-        ann["공고링크"] = _build_detail_url(bid_no)
+        # 공고 링크 — API가 제공하는 직접 링크 사용 (구 selectSubFrame.do URL은 404)
+        ann["공고링크"] = _xml_text(item, "bidNtceDtlUrl") or _xml_text(item, "bidNtceUrl") or ""
+
+        # 첨부파일 URL — API 응답에 ntceSpecDocUrl1~10으로 직접 제공됨
+        for i in range(1, 11):
+            url = _xml_text(item, f"ntceSpecDocUrl{i}")
+            if url:
+                ann["_attachment_urls"].append(url)
 
         # 내용요약 (API에 없는 경우 공고명으로 대체)
         ann["내용요약"] = _xml_text(item, "dtlBidNtceNm") or title
@@ -153,31 +159,7 @@ class G2bScraper(BaseScraper):
         return ann
 
     def fetch_detail(self, announcement: dict) -> dict:
-        # G2B 상세 페이지는 frameset 구조 — Playwright로 내부 frame HTML 추출
-        url = announcement.get("공고링크", "")
-        if not url:
-            return announcement
-        try:
-            from bs4 import BeautifulSoup
-            if self.playwright_browser is not None:
-                # frameTgong.do 가 src에 포함된 frame의 HTML을 가져온다
-                html = self.playwright_browser.get_frame_html(url, "frameTgong")
-            else:
-                resp = self._get(url)
-                html = resp.text
-            if not html:
-                return announcement
-            soup = BeautifulSoup(html, "lxml")
-            for a in soup.select(
-                "a[href*='download'], a[href*='fileDown'], a[href*='Down'], .atch a"
-            ):
-                href = a.get("href", "")
-                if href and not href.startswith("javascript"):
-                    announcement["_attachment_urls"].append(
-                        urljoin("https://www.g2b.go.kr", href)
-                    )
-        except Exception as exc:
-            logger.debug("[G2B] 상세 페이지 첨부파일 수집 실패 %s: %s", url, exc)
+        # 첨부파일 URL은 API 응답에서 직접 수집하므로 추가 처리 불필요
         return announcement
 
 
@@ -204,13 +186,3 @@ def _format_datetime(s: str) -> str:
     if len(s_clean) >= 8:
         return f"{s_clean[:4]}-{s_clean[4:6]}-{s_clean[6:8]}"
     return s
-
-
-def _build_detail_url(bid_no: str) -> str:
-    if not bid_no:
-        return ""
-    return (
-        f"https://www.g2b.go.kr/pt/menu/selectSubFrame.do"
-        f"?framesrc=/pt/menu/frameTgong.do"
-        f"?bidNtceNo={bid_no}"
-    )

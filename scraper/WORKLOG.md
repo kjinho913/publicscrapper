@@ -6,6 +6,12 @@ _None_
 
 
 ## Completed
+[2026-05-21] G2B 공고링크·첨부파일 API 직접 수집으로 전환
+- Step 1: G2B selectSubFrame.do URL → bidNtceDtlUrl (API 제공) 로 교체: done
+- Step 2: fetch_detail() Playwright 제거 → ntceSpecDocUrl1~10 API 직접 파싱: done
+- Step 3: base.py FETCH_DETAIL 플래그 추가 (no-op detail 시 sleep 제거): done
+- Step 4: 검증 (100건 수집, 193개 첨부파일 다운로드, 66건 Excel): done
+- Step 5: 커밋 및 푸시: done
 [2026-05-21] G2B/ETRI Playwright 버그 수정
 - Step 1: playwright_helper.py — page.frames() → page.frames (property): done
 - Step 2: etri.py — _fetch_page() 목록 수집을 playwright_browser.post_html()로 전환: done
@@ -65,6 +71,7 @@ _Nothing queued_
 
 ---
 <!-- session log below — newest entries at top -->
+[2026-05-21] G2B 공고링크/첨부파일 전면 개선. selectSubFrame.do(404) → bidNtceDtlUrl. Playwright 제거 후 API ntceSpecDocUrl 직접 파싱. 실행시간 6분→50초, 첨부파일 0→193개.
 [2026-05-21] G2B/ETRI 버그 수정. G2B: page.frames() → page.frames. ETRI: 목록 수집 Playwright post_html 전환으로 타임아웃 해소. G2B 100건/67건, ETRI 10건 수집 확인.
 [2026-05-21] Playwright 전환 완료. NIA/NIPA 테스트 통과 (Playwright 브라우저 정상 시작·종료, 첨부파일 수집 확인).
 [2026-05-21] NIA 버그 3건 수정: 페이지네이션 반복 감지, 배치 내 중복 제거, URL 중복 제거. 수집 50→10건, Excel 40→8건으로 정상화.

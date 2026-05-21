@@ -71,6 +71,10 @@ class BaseScraper(ABC):
     # True로 설정하면 runner.py가 PlaywrightBrowser를 생성해 주입한다.
     USE_PLAYWRIGHT_FOR_DETAIL: bool = False
 
+    # False로 설정하면 get_announcements()에서 fetch_detail() 호출 및 sleep을 건너뛴다.
+    # fetch_list()에서 이미 모든 데이터를 수집하는 경우에 사용한다.
+    FETCH_DETAIL: bool = True
+
     def __init__(self, config: dict):
         self.config = config
         req_cfg = config.get("request", {})
@@ -124,16 +128,17 @@ class BaseScraper(ABC):
             ann.setdefault("출처사이트", self.SOURCE_NAME)
             ann.setdefault("수집일시", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             ann.setdefault("_attachment_urls", [])
-            try:
-                ann = self.fetch_detail(ann)
-            except Exception as exc:
-                logger.warning(
-                    "[%s] 상세 수집 실패 (%d/%d) %s: %s",
-                    self.SOURCE_NAME, i, len(items), ann.get("공고링크", ""), exc,
-                )
+            if self.FETCH_DETAIL:
+                try:
+                    ann = self.fetch_detail(ann)
+                except Exception as exc:
+                    logger.warning(
+                        "[%s] 상세 수집 실패 (%d/%d) %s: %s",
+                        self.SOURCE_NAME, i, len(items), ann.get("공고링크", ""), exc,
+                    )
+                if i < len(items):
+                    self._sleep()
             results.append(ann)
-            if i < len(items):
-                self._sleep()
 
         logger.info("[%s] 상세 수집 완료 %d건", self.SOURCE_NAME, len(results))
         return results
