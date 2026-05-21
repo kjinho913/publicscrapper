@@ -53,6 +53,30 @@ _COL_WIDTHS = {
 }
 
 
+def get_existing_announcement_keys(config: dict) -> set[tuple]:
+    """저장된 Excel에서 기존 공고의 (공고번호, 출처사이트) 집합을 반환한다."""
+    out_cfg = config.get("output", {})
+    out_dir = Path(out_cfg.get("directory", "./output"))
+    if out_cfg.get("rolling_file", True):
+        filepath = out_dir / out_cfg.get("filename", "announcements.xlsx")
+    else:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        filepath = out_dir / f"announcements_{date_str}.xlsx"
+
+    if not filepath.exists():
+        return set()
+
+    keys: set[tuple] = set()
+    try:
+        wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+        for ws in wb.worksheets:
+            keys |= _load_existing_keys(ws)
+        wb.close()
+    except Exception as exc:
+        logger.warning("기존 공고 키 로드 실패: %s", exc)
+    return keys
+
+
 def save_announcements(
     announcements: list[dict],
     config: dict,

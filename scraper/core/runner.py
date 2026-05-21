@@ -14,6 +14,7 @@ import yaml
 from dotenv import load_dotenv
 
 from core.downloader import download_attachments
+from core.excel_writer import get_existing_announcement_keys
 from core.filters import matches
 from core.scrapers import NipaScraper, MssScraper, G2bScraper, NiaScraper, EtriScraper
 
@@ -99,14 +100,19 @@ def run_site(site_key: str, config: dict) -> tuple[list[dict], dict]:
     logger.info("[%s] 수집 %d건 → 필터 후 %d건", source, len(announcements), len(filtered))
 
     if att_enabled:
+        existing_keys = get_existing_announcement_keys(config)
+        date_str = datetime.now().strftime("%Y-%m-%d")
         for ann in filtered:
+            if (str(ann.get("공고번호", "")), str(ann.get("출처사이트", ""))) in existing_keys:
+                ann.pop("_attachment_urls", None)
+                continue
             urls = [
                 u for u in ann.pop("_attachment_urls", [])
                 if u and not u.startswith("javascript")
             ]
             if not urls:
                 continue
-            dest = att_base_dir / source / datetime.now().strftime("%Y-%m-%d")
+            dest = att_base_dir / source / date_str
             count = download_attachments(
                 urls=urls,
                 dest_dir=dest,

@@ -4,6 +4,10 @@
 _None_
 
 ## Completed
+[2026-05-21] 이미 수집한 공고의 첨부파일 재다운로드 방지
+- Step 1: excel_writer.py — get_existing_announcement_keys() 함수 추가: done
+- Step 2: runner.py — 첨부파일 루프에서 기존 공고 건너뜀 로직 추가: done
+- Step 3: 커밋 및 푸시: done
 [2026-05-21] output 폴더 구조 변경 (attachments/<site>/<공고번호> → <site>/<날짜>)
 - Step 1: config.yaml download_dir 수정 (./output/attachments → ./output): done
 - Step 2: runner.py dest 경로를 att_base_dir/source/YYYY-MM-DD 로 변경: done
@@ -37,6 +41,7 @@ _Nothing queued_
 
 ---
 <!-- session log below — newest entries at top -->
+[2026-05-21] 이미 수집한 공고 첨부파일 재다운로드 방지 구현. Excel 기존 키 기반 건너뜀.
 [2026-05-21] output 폴더 구조 변경. attachments/<site>/<공고번호> → <site>/<YYYY-MM-DD> 로 단순화.
 [2026-05-21] 디렉토리 구조 재설계 완료. app/ + scrapers/ → core/ 통합, main.py 단일 진입점으로 재작성.
 [2026-05-19] 7-Step 개선 계획 수립. Step 1 시작.
