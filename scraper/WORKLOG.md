@@ -1,0 +1,38 @@
+# Work Log
+
+## Current Task
+_None_
+
+## Completed
+[2026-05-21] 디렉토리 구조 재설계 (app/ + scrapers/ → core/)
+- Step 1: core/ 패키지 생성 (내용 무변경 파일 복사): done
+- Step 2: core/runner.py 작성 (app/site_runner.py import 수정): done
+- Step 3: core/scheduler.py 작성 (app/main.py 로직 추출): done
+- Step 4: config.yaml 루트로 이동 (app/config.yaml → config.yaml): done
+- Step 5: main.py 단일 진입점으로 통합 재작성: done
+- Step 6: 구 디렉토리 삭제 (app/, scrapers/, __pycache__): done
+
+[2026-05-19 17:00] 스크래퍼 5개 개선 작업 (7 Step)
+- Step 1: MSS cbIdx=86→310 (공고문 게시판): done
+- Step 1.5: LIST_URL/PAGE_PARAM/API_BASE를 config.yaml sites 섹션으로 이동: done
+- Step 2: 사이트별 수집 통계 표 출력 (main.py): done
+- Step 3: G2B 재실행 확인 + ETRI 활성화·셀렉터 검증: done
+- Step 4: 상세 페이지 디버그 도구 + 첨부파일 SEL_FILES 수정: done
+- Step 5: 필터링 개선 (제외 키워드 + 사이트별 설정): done
+- Step 6: NIA JS 렌더링 대응 (playwright): done
+- Step 7: 문서 업데이트 (README.md, architecture.md, progress.md): done
+
+[2026-05-19] 스크래퍼 오류 분석 및 수정
+- NIPA: LIST_URL, PAGE_PARAM, SEL_ROWS, SEL_DATE, SEL_ORG, SEL_TITLE_LINK, URL 생성 로직 수정 → 수집 정상
+- MSS: SEL_ROWS, SEL_TITLE_LINK, SEL_DATE, SEL_ORG 수정 + onclick bcIdx 추출로 URL 생성 → 수집 정상
+- G2B: API_BASE 신규 엔드포인트 + inqryDiv=1 파라미터 추가
+- NIA: cbIdx=75826→78336 수정 ("잘못된 접근" 해소), JS 렌더링 0건은 별도 이슈
+
+## Next Up
+_Nothing queued_
+
+---
+<!-- session log below — newest entries at top -->
+[2026-05-21] 디렉토리 구조 재설계 완료. app/ + scrapers/ → core/ 통합, main.py 단일 진입점으로 재작성.
+[2026-05-19] 7-Step 개선 계획 수립. Step 1 시작.
+[2026-05-19] 세션 재개. 오류 분석 완료, 수정 단계 진행 중.
