@@ -3,14 +3,10 @@
 """
 
 import logging
-import re
 import sys
 from datetime import datetime
 from pathlib import Path
 
-from core.downloader import download_attachments
-from core.excel_writer import save_announcements
-from core.filters import matches
 from core.scrapers import NipaScraper, MssScraper, G2bScraper, NiaScraper, EtriScraper
 
 _SCRAPER_MAP = {
@@ -20,9 +16,6 @@ _SCRAPER_MAP = {
     "nia":  NiaScraper,
     "etri": EtriScraper,
 }
-
-# 클래스 → config key 역방향 맵 (사이트별 필터 오버라이드에 사용)
-_SCRAPER_KEY = {cls: key for key, cls in _SCRAPER_MAP.items()}
 
 
 def setup_logging(log_dir: Path) -> None:
@@ -44,84 +37,43 @@ def setup_logging(log_dir: Path) -> None:
     )
 
 
-def enabled_scrapers(config: dict) -> list:
+def enabled_site_keys(config: dict) -> list[str]:
     sources = config.get("sources", {})
-    return [
-        cls(config)
-        for key, cls in _SCRAPER_MAP.items()
-        if sources.get(key, False)
-    ]
+    return [key for key in _SCRAPER_MAP if sources.get(key, False)]
 
 
 def run_once(config: dict) -> None:
+    """config.yaml sources에 활성화된 사이트를 순차 실행한다.
+
+    스크래핑·필터링·첨부 처리는 runner.run_site()에 위임해
+    모든 실행 경로(--once, --schedule, --g2b 등)가 동일 로직을 공유한다.
+    """
+    from core.runner import run_site
+    from core.json_store import upsert as json_upsert
+
     logger = logging.getLogger("main")
-    global_filter = config.get("filters", {})
-    att_cfg = config.get("attachments", {})
-    att_enabled = att_cfg.get("enabled", True)
-    att_base_dir = Path(att_cfg.get("download_dir", "./output/attachments"))
-    allowed_ext = att_cfg.get("allowed_extensions", None)
-    max_mb = att_cfg.get("max_file_size_mb", 50)
 
     logger.info("=" * 60)
     logger.info("수집 시작: %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     site_stats: list[dict] = []
-    total_added = 0
+    total_new = 0
+    total_update = 0
 
-    for scraper in enabled_scrapers(config):
-        source = scraper.SOURCE_NAME
-        site_key = _SCRAPER_KEY.get(type(scraper), "")
-        site_filter_override = config.get("sites", {}).get(site_key, {}).get("filters", {})
-        filter_cfg = {**global_filter, **site_filter_override} if site_filter_override else global_filter
-
-        stat = {"사이트": source, "수집": 0, "필터": 0, "첨부": 0, "오류": False}
-        try:
-            announcements = scraper.get_announcements()
-        except Exception as exc:
-            logger.error("[%s] 수집 중 예외: %s", source, exc)
-            stat["오류"] = True
-            site_stats.append(stat)
-            continue
-
-        stat["수집"] = len(announcements)
-        filtered = [a for a in announcements if matches(a, filter_cfg)]
-        stat["필터"] = len(filtered)
-        logger.info("[%s] 수집 %d건 → 필터 후 %d건", source, len(announcements), len(filtered))
-
-        # 첨부파일 다운로드
-        if att_enabled:
-            for ann in filtered:
-                urls: list[str] = [
-                    u for u in ann.pop("_attachment_urls", [])
-                    if u and not u.startswith("javascript")
-                ]
-                if not urls:
-                    continue
-                dest = att_base_dir / source / _safe_dirname(ann.get("공고번호", "unknown"))
-                count = download_attachments(
-                    urls=urls,
-                    dest_dir=dest,
-                    session=scraper.session,
-                    allowed_extensions=allowed_ext,
-                    max_mb=max_mb,
-                )
-                ann["첨부파일수"] = count
-                ann["첨부파일경로"] = str(dest.resolve()) if count > 0 else ""
-                stat["첨부"] += count
-        else:
-            for ann in filtered:
-                ann.pop("_attachment_urls", None)
-
-        # 사이트별 시트에 저장
-        if filtered:
-            total_added += save_announcements(filtered, config, sheet_name=source)
+    for site_key in enabled_site_keys(config):
+        filtered, stat = run_site(site_key, config)
         site_stats.append(stat)
 
-    _log_summary(logger, site_stats, total_added)
+        if filtered:
+            result = json_upsert(filtered, config)
+            total_new += result["신규"]
+            total_update += result["갱신"]
+
+    _log_summary(logger, site_stats, total_new, total_update)
     logger.info("=" * 60)
 
 
-def _log_summary(logger, site_stats: list[dict], excel_added: int) -> None:
+def _log_summary(logger, site_stats: list[dict], total_new: int, total_update: int) -> None:
     bar = "-" * 60
     header = f"{'사이트':<16} {'수집':>6}  {'필터':>6}  {'첨부':>6}"
     logger.info(bar)
@@ -135,8 +87,8 @@ def _log_summary(logger, site_stats: list[dict], excel_added: int) -> None:
     total_c = sum(s["수집"] for s in site_stats)
     total_f = sum(s["필터"] for s in site_stats)
     total_a = sum(s["첨부"] for s in site_stats)
-    logger.info("%-16s %5d건  %5d건  %5d개  (Excel 신규: %d건)",
-                "합계", total_c, total_f, total_a, excel_added)
+    logger.info("%-16s %5d건  %5d건  %5d개  (신규 %d건 / 갱신 %d건)",
+                "합계", total_c, total_f, total_a, total_new, total_update)
     logger.info(bar)
 
 
@@ -189,6 +141,3 @@ def _run_schedule(config: dict, logger) -> None:
         time.sleep(60)
 
 
-def _safe_dirname(name: str) -> str:
-    """파일 시스템에 사용 불가한 문자를 제거한다."""
-    return re.sub(r'[\\/*?:"<>|]', "_", name)[:80]

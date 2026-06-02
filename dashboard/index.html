@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>나라장터 공고 대시보드</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+      background: #f5f6fa;
+      color: #222;
+      font-size: 14px;
+    }
+
+    /* ── 헤더 ── */
+    header {
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a2e;
+      flex-shrink: 0;
+    }
+
+    #generated-at {
+      font-size: 12px;
+      color: #888;
+      margin-left: auto;
+    }
+
+    /* ── 탭 ── */
+    .tab-bar {
+      background: #fff;
+      border-bottom: 2px solid #e0e0e0;
+      padding: 0 24px;
+      display: flex;
+      gap: 0;
+    }
+
+    .tab-btn {
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #888;
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      margin-bottom: -2px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .tab-btn.active {
+      color: #2563eb;
+      border-bottom-color: #2563eb;
+    }
+
+    .tab-btn:hover:not(.active) { color: #444; background: none; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── 컨트롤 ── */
+    .controls {
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .controls label {
+      font-size: 13px;
+      color: #555;
+    }
+
+    select {
+      padding: 5px 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 13px;
+      background: #fff;
+      cursor: pointer;
+    }
+
+    button {
+      padding: 5px 14px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 13px;
+      background: #fff;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button:hover { background: #f0f0f0; }
+
+    button.active {
+      background: #2563eb;
+      color: #fff;
+      border-color: #2563eb;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    /* ── 통계 ── */
+    #stats {
+      padding: 10px 24px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    /* ── 테이블 ── */
+    .table-wrap {
+      padding: 12px 24px 0;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+
+    thead tr { background: #f0f2f8; }
+
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #444;
+      border-bottom: 1px solid #e0e0e0;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 9px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      vertical-align: middle;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tbody tr { transition: background 0.1s; }
+    tbody tr:hover { background: #f8f9ff; }
+    tbody tr.analyzed-row { cursor: pointer; }
+    tbody tr.analyzed-row:hover { background: #eef3ff; }
+
+    .title-cell { max-width: 300px; word-break: keep-all; }
+
+    /* ── 배지 ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .badge-analyzed   { background: #d1fae5; color: #065f46; }
+    .badge-pending    { background: #f3f4f6; color: #6b7280; }
+    .badge-waiting    { background: #fef3c7; color: #92400e; }
+    .badge-reviewing  { background: #dbeafe; color: #1e40af; }
+
+    /* ── 다운로드 버튼 ── */
+    .dl-btn {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #2563eb;
+      color: #2563eb;
+      background: #fff;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .dl-btn:hover:not(:disabled) { background: #2563eb; color: #fff; }
+
+    .dl-btn.downloading {
+      border-color: #f59e0b;
+      color: #92400e;
+      background: #fef3c7;
+      cursor: not-allowed;
+    }
+
+    .dl-btn.ready {
+      border-color: #059669;
+      color: #065f46;
+      background: #d1fae5;
+      cursor: default;
+    }
+
+    .dl-btn.analyzed-done {
+      border-color: #6366f1;
+      color: #4338ca;
+      background: #eef2ff;
+      cursor: default;
+    }
+
+    .dl-btn.failed {
+      border-color: #dc2626;
+      color: #dc2626;
+      background: #fef2f2;
+      cursor: pointer;
+    }
+
+    .dl-btn.no-attach {
+      border-color: #d1d5db;
+      color: #9ca3af;
+      background: #f9fafb;
+      cursor: default;
+    }
+
+    /* ── 마감일 강조 ── */
+    .deadline-urgent { color: #dc2626; font-weight: 600; }
+
+    /* ── 링크 ── */
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── 상세 패널 ── */
+    #detail-panel {
+      display: none;
+      margin: 16px 24px;
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 20px 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    #detail-panel h2 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #1a1a2e;
+    }
+
+    #detail-close {
+      float: right;
+      font-size: 18px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #888;
+      padding: 0;
+      line-height: 1;
+    }
+
+    #detail-close:hover { color: #333; background: none; }
+
+    #detail-meta {
+      font-size: 12px;
+      color: #777;
+      margin-bottom: 14px;
+    }
+
+    #detail-summary {
+      white-space: pre-wrap;
+      font-size: 13px;
+      line-height: 1.7;
+      color: #333;
+      background: #f9fafb;
+      border-radius: 6px;
+      padding: 14px 16px;
+    }
+
+    /* ── 로딩/오류 ── */
+    #loading, #error-msg {
+      text-align: center;
+      padding: 40px;
+      color: #888;
+      font-size: 14px;
+    }
+
+    #error-msg { color: #dc2626; }
+
+    /* ── 탭2: 분석 리포트 레이아웃 ── */
+    #tab2 .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a1a2e;
+      padding: 18px 24px 8px;
+      border-bottom: 1px solid #e0e0e0;
+      background: #fff;
+      margin-bottom: 0;
+    }
+
+    /* 분석완료 목록 */
+    #analyzed-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+      padding: 16px 24px;
+    }
+
+    .report-card {
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: box-shadow 0.15s, border-color 0.15s;
+    }
+
+    .report-card:hover { box-shadow: 0 2px 8px rgba(37,99,235,0.12); border-color: #2563eb; }
+
+    .report-card h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 6px;
+      line-height: 1.45;
+    }
+
+    .report-card .card-meta {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .report-card .card-summary {
+      font-size: 12px;
+      color: #555;
+      line-height: 1.55;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* 리포트 상세 뷰어 */
+    #report-viewer {
+      display: none;
+      margin: 0 24px 20px;
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 24px 28px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    #report-viewer-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      gap: 16px;
+    }
+
+    #report-viewer-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a1a2e;
+      flex: 1;
+    }
+
+    #report-close {
+      flex-shrink: 0;
+      font-size: 18px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #888;
+      padding: 0;
+      line-height: 1;
+    }
+
+    #report-close:hover { color: #333; background: none; }
+
+    /* 마크다운 렌더링 영역 */
+    #report-body {
+      font-size: 13px;
+      line-height: 1.75;
+      color: #333;
+    }
+
+    #report-body h1 { font-size: 18px; font-weight: 700; margin: 20px 0 10px; color: #1a1a2e; }
+    #report-body h2 { font-size: 15px; font-weight: 700; margin: 18px 0 8px; color: #1e3a8a; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+    #report-body h3 { font-size: 13px; font-weight: 700; margin: 14px 0 6px; color: #374151; }
+    #report-body p  { margin: 0 0 10px; }
+    #report-body ul, #report-body ol { margin: 0 0 10px 20px; }
+    #report-body li { margin-bottom: 3px; }
+    #report-body table { border-collapse: collapse; width: 100%; margin: 10px 0 16px; font-size: 12px; }
+    #report-body th { background: #f0f2f8; padding: 7px 10px; border: 1px solid #d1d5db; font-weight: 600; text-align: left; white-space: nowrap; }
+    #report-body td { padding: 6px 10px; border: 1px solid #e5e7eb; vertical-align: top; }
+    #report-body blockquote { border-left: 3px solid #2563eb; margin: 10px 0; padding: 8px 14px; background: #f0f4ff; color: #374151; border-radius: 0 4px 4px 0; }
+    #report-body code { background: #f3f4f6; border-radius: 3px; padding: 1px 5px; font-family: monospace; font-size: 12px; }
+    #report-body pre code { display: block; padding: 10px; overflow-x: auto; }
+    #report-body strong { color: #111; }
+
+    /* 분석 대기 섹션 */
+    #pending-list {
+      padding: 12px 24px 24px;
+    }
+
+    .pending-notice {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #92400e;
+      margin-bottom: 14px;
+      line-height: 1.6;
+    }
+
+    .pending-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
+
+    .pending-card h4 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 8px;
+    }
+
+    .pending-card .pdf-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+
+    .pdf-path-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .pdf-path-text {
+      font-size: 11px;
+      color: #374151;
+      font-family: monospace;
+      background: #f3f4f6;
+      padding: 3px 8px;
+      border-radius: 4px;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .copy-btn {
+      font-size: 11px;
+      padding: 2px 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+      white-space: nowrap;
+      color: #555;
+      flex-shrink: 0;
+    }
+
+    .copy-btn:hover { background: #f0f0f0; }
+    .copy-btn.copied { background: #d1fae5; border-color: #059669; color: #065f46; }
+
+    .pending-empty {
+      text-align: center;
+      padding: 40px 24px;
+      color: #aaa;
+      font-size: 14px;
+    }
+
+    #tab2-loading {
+      text-align: center;
+      padding: 40px;
+      color: #888;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>나라장터 공고 대시보드</h1>
+  <span id="generated-at"></span>
+</header>
+
+<!-- ── 탭 바 ── -->
+<div class="tab-bar">
+  <button class="tab-btn active" data-tab="tab1">공고 목록</button>
+  <button class="tab-btn" data-tab="tab2">분석 리포트</button>
+</div>
+
+<!-- ══════════════════════ 탭1: 공고 목록 ══════════════════════ -->
+<div id="tab1" class="tab-panel active">
+
+  <div class="controls">
+    <label for="field-filter">분야:</label>
+    <select id="field-filter">
+      <option value="">전체</option>
+    </select>
+
+    <label for="status-filter">판단상태:</label>
+    <select id="status-filter">
+      <option value="">전체</option>
+      <option value="미검토">미검토</option>
+      <option value="분석대기">분석대기</option>
+      <option value="검토완료">검토완료</option>
+    </select>
+
+    <button id="toggle-analyzed">분석완료만 보기</button>
+    <button id="refresh-btn" style="margin-left:auto;">새로고침</button>
+  </div>
+
+  <div id="stats"></div>
+
+  <div class="table-wrap">
+    <div id="loading">데이터를 불러오는 중...</div>
+    <div id="error-msg" style="display:none;"></div>
+    <table id="main-table" style="display:none;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>공고명</th>
+          <th>발주기관</th>
+          <th>분야</th>
+          <th>예산(원)</th>
+          <th>마감일시</th>
+          <th>단계</th>
+          <th>판단상태</th>
+          <th>다운로드</th>
+          <th>출처</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+
+  <div id="detail-panel">
+    <button id="detail-close">&#x2715;</button>
+    <h2 id="detail-title"></h2>
+    <div id="detail-meta"></div>
+    <div id="detail-summary"></div>
+  </div>
+
+</div><!-- /tab1 -->
+
+<!-- ══════════════════════ 탭2: 분석 리포트 ══════════════════════ -->
+<div id="tab2" class="tab-panel">
+
+  <div id="tab2-loading">데이터를 불러오는 중...</div>
+
+  <!-- ── 분석완료 리포트 섹션 ── -->
+  <div id="tab2-analyzed-section" style="display:none;">
+    <div class="section-title">분석 완료된 공고 — 클릭하면 리포트 전문이 표시됩니다</div>
+    <div id="analyzed-list"></div>
+
+    <!-- 리포트 전문 뷰어 -->
+    <div id="report-viewer">
+      <div id="report-viewer-header">
+        <div id="report-viewer-title"></div>
+        <button id="report-close">&#x2715;</button>
+      </div>
+      <div id="report-body"></div>
+    </div>
+  </div>
+
+  <!-- ── 분석 대기 섹션 ── -->
+  <div id="tab2-pending-section" style="display:none;">
+    <div class="section-title">분석 대기 공고 — Claude Code rfp-analyzer로 분석하세요</div>
+    <div id="pending-list">
+      <div class="pending-notice">
+        아래 공고들은 파일 다운로드가 완료되어 분석 준비가 된 상태입니다.<br>
+        PDF 경로를 복사하여 Claude Code에서 <strong>rfp-analyzer</strong> 에이전트에 붙여넣은 뒤 분석을 실행하세요.<br>
+        분석 결과(<code>analysis/{stable_id}/result.md</code>)가 저장되면 이 탭에서 자동으로 리포트로 이동합니다.
+      </div>
+      <div id="pending-cards"></div>
+    </div>
+  </div>
+
+  <!-- 탭2 전체 빈 상태 -->
+  <div id="tab2-empty" style="display:none; text-align:center; padding:60px 24px; color:#aaa; font-size:14px;">
+    분석완료 또는 분석대기 공고가 없습니다.<br>
+    탭1에서 관심 공고를 다운로드하면 분석 대기 목록이 여기에 표시됩니다.
+  </div>
+
+</div><!-- /tab2 -->
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════
+// file:// 직접 열기 방어
+// ══════════════════════════════════════════════════════════════════════════
+if (window.location.protocol === "file:") {
+  document.body.innerHTML = `
+    <div style="
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; background: #f5f6fa;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+    ">
+      <div style="
+        background: #fff; border: 1px solid #e0e0e0; border-radius: 12px;
+        padding: 40px 48px; max-width: 480px; text-align: center;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+      ">
+        <div style="font-size: 48px; margin-bottom: 16px;">&#9888;&#65039;</div>
+        <h1 style="font-size: 18px; font-weight: 700; color: #1a1a2e; margin-bottom: 12px;">
+          이 페이지는 직접 열 수 없습니다
+        </h1>
+        <p style="font-size: 14px; color: #555; line-height: 1.7; margin-bottom: 20px;">
+          대시보드는 Flask 서버를 통해서만 동작합니다.<br>
+          아래 절차대로 실행하세요.
+        </p>
+        <div style="
+          background: #f0f4ff; border: 1px solid #c7d7ff; border-radius: 8px;
+          padding: 16px 20px; text-align: left; font-size: 13px; color: #1e3a8a; line-height: 1.8;
+        ">
+          1. <code style="background:#dbeafe; padding:1px 6px; border-radius:4px;">scripts\run_dashboard.bat</code> 을 더블클릭<br>
+          2. 잠시 후 브라우저가 자동으로 열립니다<br>
+          3. 또는 직접 <strong>http://127.0.0.1:5050</strong> 을 주소창에 입력
+        </div>
+      </div>
+    </div>`;
+  throw new Error("file:// 프로토콜로 열림 — 스크립트 실행 중단");
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 상수 & 상태
+// ══════════════════════════════════════════════════════════════════════════
+const API_ANNOUNCEMENTS = "/api/announcements";
+const API_DOWNLOAD      = (id) => `/api/download/${id}`;
+const API_STATUS        = (id) => `/api/status/${id}`;
+const POLL_INTERVAL_MS  = 2500;   // 폴링 간격
+const URGENT_DAYS       = 7;
+
+let allItems         = [];        // 전체 공고 목록 (서버에서 로드)
+let showAnalyzedOnly = false;
+let selectedField    = "";
+let selectedStatus   = "";
+
+// stable_id → setInterval 핸들 (폴링 관리)
+const pollingMap = {};
+
+// ══════════════════════════════════════════════════════════════════════════
+// 탭 전환
+// ══════════════════════════════════════════════════════════════════════════
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(btn.dataset.tab).classList.add("active");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// 날짜 유틸
+// ══════════════════════════════════════════════════════════════════════════
+function parseDeadline(str) {
+  if (!str) return null;
+  const d = new Date(str.replace(/\//g, "-"));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function isUrgent(deadline) {
+  const d = parseDeadline(deadline);
+  if (!d) return false;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = (d - today) / (1000 * 60 * 60 * 24);
+  return diff >= 0 && diff <= URGENT_DAYS;
+}
+
+function deadlineSort(a, b) {
+  const da = parseDeadline(a["마감일시"]);
+  const db = parseDeadline(b["마감일시"]);
+  if (!da && !db) return 0;
+  if (!da) return 1;
+  if (!db) return -1;
+  return da - db;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// HTML 이스케이프
+// ══════════════════════════════════════════════════════════════════════════
+function escHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 다운로드 버튼 상태 표시
+// ══════════════════════════════════════════════════════════════════════════
+function downloadBtnLabel(item) {
+  const st   = item["다운로드상태"] || "none";
+  const urls = item["첨부URL개수"]  || 0;
+
+  if (item.analyzed)                return { label: "분석완료", cls: "analyzed-done", disabled: true };
+  if (item["판단상태"] === "분석대기") return { label: "분석대기", cls: "ready",        disabled: true };
+  if (st === "ready")               return { label: "분석대기", cls: "ready",        disabled: true };
+  if (st === "downloading")         return { label: "다운로드중...", cls: "downloading", disabled: true };
+  if (st === "failed")              return { label: "실패(재시도)", cls: "failed",     disabled: false };
+  if (urls === 0)                   return { label: "첨부없음",  cls: "no-attach",   disabled: true };
+  return                                    { label: "다운로드",  cls: "",            disabled: false };
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 폴링
+// ══════════════════════════════════════════════════════════════════════════
+function startPolling(stableId) {
+  if (pollingMap[stableId]) return;  // 이미 폴링 중
+
+  pollingMap[stableId] = setInterval(async () => {
+    try {
+      const resp = await fetch(API_STATUS(stableId));
+      if (!resp.ok) return;
+      const data = await resp.json();
+
+      const status = data["다운로드상태"];
+      // 아이템 상태 업데이트
+      const item = allItems.find(i => i.stable_id === stableId);
+      if (item) {
+        item["다운로드상태"] = status;
+        item["판단상태"]     = data["판단상태"];
+        item["analyzed"]     = data["analyzed"];
+      }
+
+      // 버튼 갱신
+      const btn = document.getElementById(`dl-btn-${stableId}`);
+      if (btn) {
+        const { label, cls, disabled } = downloadBtnLabel(item || { 다운로드상태: status });
+        btn.textContent = label;
+        btn.className   = `dl-btn ${cls}`;
+        btn.disabled    = disabled;
+      }
+
+      // 종료 조건: ready / failed → 폴링 중단
+      if (status === "ready" || status === "failed" || data["analyzed"]) {
+        clearInterval(pollingMap[stableId]);
+        delete pollingMap[stableId];
+        // 전체 테이블 재렌더 (판단상태 배지 등 갱신)
+        renderTable();
+      }
+    } catch (e) {
+      // 네트워크 오류는 무시, 다음 틱에서 재시도
+    }
+  }, POLL_INTERVAL_MS);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 다운로드 버튼 클릭 핸들러
+// ══════════════════════════════════════════════════════════════════════════
+async function handleDownload(stableId, btn) {
+  btn.disabled  = true;
+  btn.textContent = "요청 중...";
+
+  try {
+    const resp = await fetch(API_DOWNLOAD(stableId), { method: "POST" });
+    const data = await resp.json();
+
+    if (resp.status === 409) {
+      // 이미 진행 중
+      btn.textContent = "다운로드중...";
+      btn.className   = "dl-btn downloading";
+      startPolling(stableId);
+      return;
+    }
+
+    if (resp.ok || resp.status === 202) {
+      const item = allItems.find(i => i.stable_id === stableId);
+      if (item) item["다운로드상태"] = data.status;
+
+      if (data.status === "ready") {
+        // 첨부없음: 즉시 ready
+        if (item) { item["판단상태"] = "분석대기"; }
+        btn.textContent = "분석대기";
+        btn.className   = "dl-btn ready";
+        renderTable();
+      } else if (data.status === "downloading") {
+        btn.textContent = "다운로드중...";
+        btn.className   = "dl-btn downloading";
+        startPolling(stableId);
+      } else {
+        btn.textContent = "완료";
+        btn.className   = "dl-btn ready";
+      }
+    } else {
+      btn.textContent = "실패(재시도)";
+      btn.className   = "dl-btn failed";
+      btn.disabled    = false;
+    }
+  } catch (e) {
+    btn.textContent = "오류(재시도)";
+    btn.className   = "dl-btn failed";
+    btn.disabled    = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 필터 & 렌더
+// ══════════════════════════════════════════════════════════════════════════
+function getFiltered() {
+  return allItems
+    .filter(item => {
+      if (showAnalyzedOnly && !item.analyzed) return false;
+      if (selectedField  && item.field !== selectedField)             return false;
+      if (selectedStatus && item["판단상태"] !== selectedStatus)      return false;
+      return true;
+    })
+    .sort(deadlineSort);
+}
+
+function 판단상태Badge(st) {
+  if (st === "검토완료") return `<span class="badge badge-analyzed">검토완료</span>`;
+  if (st === "분석대기") return `<span class="badge badge-waiting">분석대기</span>`;
+  if (st === "미검토")   return `<span class="badge badge-pending">미검토</span>`;
+  return `<span class="badge badge-pending">${escHtml(st)}</span>`;
+}
+
+function renderTable() {
+  const filtered = getFiltered();
+  const tbody = document.getElementById("table-body");
+  tbody.innerHTML = "";
+
+  filtered.forEach((item, idx) => {
+    const tr = document.createElement("tr");
+    if (item.analyzed) tr.classList.add("analyzed-row");
+
+    const deadline = item["마감일시"] || "";
+    const urgent   = isUrgent(deadline);
+    const dlDeadline = deadline
+      ? `<span class="${urgent ? "deadline-urgent" : ""}">${escHtml(deadline)}</span>`
+      : "-";
+
+    const linkHtml = item["공고링크"]
+      ? `<a href="${escHtml(item["공고링크"])}" target="_blank" rel="noopener">${escHtml(item["출처사이트"] || "링크")}</a>`
+      : escHtml(item["출처사이트"] || "-");
+
+    const { label, cls, disabled } = downloadBtnLabel(item);
+    const disabledAttr = disabled ? " disabled" : "";
+    const dlBtn = `<button class="dl-btn ${cls}" id="dl-btn-${escHtml(item.stable_id)}"${disabledAttr}>${label}</button>`;
+
+    tr.innerHTML = `
+      <td>${idx + 1}</td>
+      <td class="title-cell">${escHtml(item["공고명"])}</td>
+      <td>${escHtml(item["발주기관"])}</td>
+      <td>${escHtml(item.field || "-")}</td>
+      <td>${escHtml(item["예산금액"] || "-")}</td>
+      <td>${dlDeadline}</td>
+      <td>${escHtml(item["단계"] || "-")}</td>
+      <td>${판단상태Badge(item["판단상태"])}</td>
+      <td>${dlBtn}</td>
+      <td>${linkHtml}</td>
+    `;
+
+    // 다운로드 버튼 이벤트
+    const btn = tr.querySelector(".dl-btn");
+    if (btn && !disabled) {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        handleDownload(item.stable_id, btn);
+      });
+    }
+
+    // 분석완료 행 클릭 → 상세
+    if (item.analyzed) {
+      tr.addEventListener("click", (e) => {
+        if (e.target.tagName === "A" || e.target.classList.contains("dl-btn")) return;
+        showDetail(item);
+      });
+    }
+
+    tbody.appendChild(tr);
+
+    // 다운로드 중인 항목은 폴링 재연결 (페이지 새로고침 후에도 복원)
+    if (item["다운로드상태"] === "downloading" && !pollingMap[item.stable_id]) {
+      startPolling(item.stable_id);
+    }
+  });
+
+  const analyzedCnt = filtered.filter(i => i.analyzed).length;
+  const readyCnt    = filtered.filter(i => i["판단상태"] === "분석대기").length;
+  document.getElementById("stats").textContent =
+    `표시: ${filtered.length}건 | 분석완료: ${analyzedCnt}건 | 분석대기: ${readyCnt}건 | 전체: ${allItems.length}건`;
+
+  hideDetail();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 분야 드롭다운
+// ══════════════════════════════════════════════════════════════════════════
+function buildFieldFilter() {
+  const fields = [...new Set(allItems.map(i => i.field).filter(Boolean))].sort();
+  const sel = document.getElementById("field-filter");
+  // 기존 옵션(전체) 이후 추가
+  sel.querySelectorAll("option:not([value=''])").forEach(o => o.remove());
+  fields.forEach(f => {
+    const opt = document.createElement("option");
+    opt.value = f; opt.textContent = f;
+    sel.appendChild(opt);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 상세 패널
+// ══════════════════════════════════════════════════════════════════════════
+function showDetail(item) {
+  document.getElementById("detail-title").textContent = item["공고명"] || "(제목 없음)";
+  document.getElementById("detail-meta").textContent =
+    `${item["발주기관"] || ""} · ${item.field || ""} · 예산 ${item["예산금액"] || "-"} · 마감 ${item["마감일시"] || "-"}`;
+  document.getElementById("detail-summary").textContent =
+    item.summary || "(Executive Summary 없음)";
+  const panel = document.getElementById("detail-panel");
+  panel.style.display = "block";
+  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function hideDetail() {
+  document.getElementById("detail-panel").style.display = "none";
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 데이터 로드
+// ══════════════════════════════════════════════════════════════════════════
+async function loadData() {
+  document.getElementById("loading").style.display    = "block";
+  document.getElementById("main-table").style.display = "none";
+  document.getElementById("error-msg").style.display  = "none";
+
+  try {
+    const resp = await fetch(API_ANNOUNCEMENTS);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    allItems = data.items || [];
+    document.getElementById("generated-at").textContent =
+      allItems.length ? `${allItems.length}건 로드` : "";
+
+    buildFieldFilter();
+    document.getElementById("loading").style.display    = "none";
+    document.getElementById("main-table").style.display = "table";
+    renderTable();
+  } catch (e) {
+    document.getElementById("loading").style.display = "none";
+    const errEl = document.getElementById("error-msg");
+    errEl.style.display = "block";
+    errEl.textContent = `데이터 로드 실패: ${e.message}`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 이벤트 바인딩
+// ══════════════════════════════════════════════════════════════════════════
+document.getElementById("toggle-analyzed").addEventListener("click", function() {
+  showAnalyzedOnly = !showAnalyzedOnly;
+  this.classList.toggle("active", showAnalyzedOnly);
+  renderTable();
+});
+
+document.getElementById("field-filter").addEventListener("change", function() {
+  selectedField = this.value;
+  renderTable();
+});
+
+document.getElementById("status-filter").addEventListener("change", function() {
+  selectedStatus = this.value;
+  renderTable();
+});
+
+document.getElementById("refresh-btn").addEventListener("click", loadData);
+document.getElementById("detail-close").addEventListener("click", hideDetail);
+
+// ══════════════════════════════════════════════════════════════════════════
+// 초기화
+// ══════════════════════════════════════════════════════════════════════════
+loadData();
+
+// ══════════════════════════════════════════════════════════════════════════
+// 탭2: 분석 리포트
+// ══════════════════════════════════════════════════════════════════════════
+const API_REPORT          = (id) => `/api/report/${id}`;
+const API_PENDING         = "/api/pending-analysis";
+
+// 탭2 클릭 시 데이터 로드 (한 번만)
+let tab2Loaded = false;
+
+document.querySelector('[data-tab="tab2"]').addEventListener("click", () => {
+  if (!tab2Loaded) {
+    tab2Loaded = true;
+    loadTab2();
+  }
+});
+
+async function loadTab2() {
+  document.getElementById("tab2-loading").style.display = "block";
+  document.getElementById("tab2-analyzed-section").style.display = "none";
+  document.getElementById("tab2-pending-section").style.display  = "none";
+  document.getElementById("tab2-empty").style.display            = "none";
+
+  try {
+    // 공고 목록(allItems)에서 분석완료 항목 추출 (이미 로드되어 있음)
+    // allItems가 아직 없으면 API 재호출
+    let items = allItems;
+    if (!items || items.length === 0) {
+      const r = await fetch(API_ANNOUNCEMENTS);
+      const d = await r.json();
+      items = d.items || [];
+    }
+    const analyzedItems = items.filter(i => i.analyzed);
+
+    // 분석대기 목록은 별도 API
+    const pendingResp = await fetch(API_PENDING);
+    const pendingData = await pendingResp.json();
+    const pendingItems = pendingData.items || [];
+
+    document.getElementById("tab2-loading").style.display = "none";
+
+    const hasAnalyzed = analyzedItems.length > 0;
+    const hasPending  = pendingItems.length > 0;
+
+    if (!hasAnalyzed && !hasPending) {
+      document.getElementById("tab2-empty").style.display = "block";
+      return;
+    }
+
+    if (hasAnalyzed) {
+      renderAnalyzedList(analyzedItems);
+      document.getElementById("tab2-analyzed-section").style.display = "block";
+    }
+
+    if (hasPending) {
+      renderPendingList(pendingItems);
+      document.getElementById("tab2-pending-section").style.display = "block";
+    }
+
+  } catch (e) {
+    document.getElementById("tab2-loading").textContent = `로드 실패: ${e.message}`;
+  }
+}
+
+// ── 분석완료 카드 목록 렌더 ──────────────────────────────────────────────
+function renderAnalyzedList(items) {
+  const container = document.getElementById("analyzed-list");
+  container.innerHTML = "";
+
+  items.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "report-card";
+    card.innerHTML = `
+      <h3>${escHtml(item["공고명"])}</h3>
+      <div class="card-meta">${escHtml(item["발주기관"] || "")} · ${escHtml(item.field || "분야 미상")} · 마감 ${escHtml(item["마감일시"] || "-")}</div>
+      <div class="card-summary">${escHtml(item.summary || "(요약 없음)")}</div>
+    `;
+    card.addEventListener("click", () => openReport(item.stable_id, item["공고명"]));
+    container.appendChild(card);
+  });
+}
+
+// ── 리포트 전문 열기 ─────────────────────────────────────────────────────
+async function openReport(stableId, title) {
+  const viewer = document.getElementById("report-viewer");
+  document.getElementById("report-viewer-title").textContent = title || "(제목 없음)";
+  document.getElementById("report-body").innerHTML = "<p style='color:#888'>리포트를 불러오는 중...</p>";
+  viewer.style.display = "block";
+  viewer.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  try {
+    const resp = await fetch(API_REPORT(stableId));
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    document.getElementById("report-body").innerHTML = data.html || "<p>(내용 없음)</p>";
+  } catch (e) {
+    document.getElementById("report-body").innerHTML =
+      `<p style='color:#dc2626'>리포트 로드 실패: ${escHtml(e.message)}</p>`;
+  }
+}
+
+document.getElementById("report-close").addEventListener("click", () => {
+  document.getElementById("report-viewer").style.display = "none";
+});
+
+// ── 분석대기 카드 목록 렌더 ──────────────────────────────────────────────
+function renderPendingList(items) {
+  const container = document.getElementById("pending-cards");
+  container.innerHTML = "";
+
+  if (items.length === 0) {
+    container.innerHTML = '<div class="pending-empty">분석 대기 공고가 없습니다.</div>';
+    return;
+  }
+
+  items.forEach(item => {
+    const paths = item["변환경로목록"] || [];
+    const pathsHtml = paths.length > 0
+      ? paths.map(p => `
+          <div class="pdf-path-item">
+            <span class="pdf-path-text" title="${escHtml(p)}">${escHtml(p)}</span>
+            <button class="copy-btn" data-path="${escHtml(p)}">복사</button>
+          </div>
+        `).join("")
+      : `<div style="font-size:12px;color:#aaa;">변환된 PDF 없음 (첨부 없는 공고이거나 아직 변환 미완료)</div>`;
+
+    const card = document.createElement("div");
+    card.className = "pending-card";
+    card.innerHTML = `
+      <h4>${escHtml(item["공고명"])}</h4>
+      <div style="margin-bottom:4px;font-size:11px;color:#6b7280;">
+        ID: <code>${escHtml(item["stable_id"])}</code>
+      </div>
+      <div class="pdf-label">분석에 사용할 PDF 경로 (복사 후 Claude Code에 붙여넣기)</div>
+      ${pathsHtml}
+    `;
+
+    // 복사 버튼 이벤트
+    card.querySelectorAll(".copy-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const path = btn.dataset.path;
+        try {
+          await navigator.clipboard.writeText(path);
+          btn.textContent = "복사됨!";
+          btn.classList.add("copied");
+          setTimeout(() => {
+            btn.textContent = "복사";
+            btn.classList.remove("copied");
+          }, 1800);
+        } catch (e) {
+          // 클립보드 API 실패 시 fallback: 선택 상태로
+          btn.textContent = "수동복사";
+        }
+      });
+    });
+
+    container.appendChild(card);
+  });
+}
+</script>
+</body>
+</html>

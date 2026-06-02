@@ -64,7 +64,14 @@ class NipaScraper(BaseScraper):
             if not has_next or not items:
                 break
             self._sleep()
-        return results
+        seen: set[str] = set()
+        deduped: list[dict] = []
+        for item in results:
+            key = item.get("공고링크", "")
+            if key and key not in seen:
+                seen.add(key)
+                deduped.append(item)
+        return deduped
 
     def _fetch_page(self, page: int) -> tuple[list[dict], bool]:
         url = f"{self._list_url}&{self._page_param}={page}"
@@ -109,13 +116,11 @@ class NipaScraper(BaseScraper):
         href = title_el.get("href", "")
         ann["공고링크"] = urljoin(self._list_url, href)
 
-        # 공고번호: URL에서 추출하거나 행 번호 셀에서 읽음
-        num_el = row.select_one("td.num, td:first-child, .num")
-        ann["공고번호"] = (
-            num_el.get_text(strip=True)
-            if num_el
-            else _extract_id_from_url(href)
-        )
+        # 공고번호: URL에서 먼저 추출, 실패 시 행 번호 셀에서 읽음
+        ann["공고번호"] = _extract_id_from_url(href) or ""
+        if not ann["공고번호"]:
+            num_el = row.select_one("td.num, .num")
+            ann["공고번호"] = num_el.get_text(strip=True) if num_el else ""
 
         # 게재일
         date_el = row.select_one(SEL_DATE)
@@ -125,9 +130,8 @@ class NipaScraper(BaseScraper):
         org_el = row.select_one(SEL_ORG)
         ann["발주기관"] = org_el.get_text(strip=True) if org_el else "NIPA"
 
-        # 마감일 (목록에 없으면 상세에서 보완)
-        deadline_el = row.select_one(SEL_DEADLINE)
-        ann["마감일시"] = deadline_el.get_text(strip=True) if deadline_el else ""
+        # 마감일: 목록의 D-xx 컬럼은 절대 날짜가 아니므로 항상 빈 값으로 두고 상세에서 추출
+        ann["마감일시"] = ""
 
         return ann
 
@@ -150,9 +154,11 @@ class NipaScraper(BaseScraper):
         if budget_el:
             announcement["예산금액"] = _clean_amount(budget_el.get_text(strip=True))
 
-        # 마감일 (목록에서 못 얻었을 경우 상세에서 재시도)
+        # 마감일: 항상 상세 페이지에서 추출
+        full_text = soup.get_text()
+        announcement["마감일시"] = _extract_deadline_from_text(full_text)
         if not announcement["마감일시"]:
-            announcement["마감일시"] = _extract_deadline_from_text(soup.get_text())
+            announcement["마감일시"] = _extract_deadline_from_html(str(soup))
 
         # 첨부파일 URL 수집
         file_links = soup.select(SEL_FILES)
@@ -201,3 +207,9 @@ def _extract_deadline_from_text(full_text: str) -> str:
         if m:
             return m.group(1).strip()
     return ""
+
+
+def _extract_deadline_from_html(html: str) -> str:
+    """HTML 원문에서 한국어 날짜 표기(2025년 3월 5일)를 찾아 반환한다."""
+    m = re.search(r"(\d{4}년\s*\d{1,2}월\s*\d{1,2}일)", html)
+    return m.group(1).strip() if m else ""

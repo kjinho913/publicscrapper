@@ -1,18 +1,38 @@
 """
-나라장터 (G2B) 스크래퍼 — 공공데이터포털 오픈API 기반
-API: https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc
+나라장터 (G2B) 스크래퍼 v1.0 — PPSSrch 검색어 기반 수집
+API 기반: 공공데이터포털 오픈API
+
+[수집 단계]
+  - 입찰공고: getBidPblancListInfoServcPPSSrch  (bidNtceNm 파라미터로 서버 검색)
+  - 사전규격: getPublicPrcureThngInfoServcPPSSrch (prdctClsfcNoNm 파라미터로 서버 검색)
 
 [API 키 설정]
-config.yaml의 api_keys.g2b_api_key에 공공데이터포털 발급 키를 입력하세요.
-발급: https://www.data.go.kr → 검색 "입찰공고정보" → 활용신청
+  scraper/.env 파일에 G2B_API_KEY=<발급키> 형태로 입력하세요.
+  발급: https://www.data.go.kr → "입찰공고정보" 또는 "사전규격정보" 검색 → 활용신청
 
-API 응답 형식: XML
-주요 파라미터:
-  - numOfRows: 한 번에 가져올 건수 (최대 999)
-  - pageNo: 페이지 번호
-  - inqryBgnDt: 조회 시작일 (YYYYMMDD0000)
-  - inqryEndDt: 조회 종료일 (YYYYMMDD2359)
-  - bidClsfcNo: 입찰분류번호 (선택)
+[검증된 API 응답 필드 (2026-06-02 실제 호출 확인)]
+  입찰공고 PPSSrch:
+    공고번호    : bidNtceNo
+    공고명      : bidNtceNm
+    발주기관    : dminsttNm / ntceInsttNm
+    공고일      : bidNtceDt
+    마감일시    : bidClseDt
+    예산금액    : asignBdgtAmt
+    공고링크    : bidNtceDtlUrl
+    첨부파일    : ntceSpecDocUrl1 ~ ntceSpecDocUrl10
+    계약방법    : cntrctCnclsMthdNm  (필터 전용)
+    낙찰방법    : sucsfbidMthdNm     (필터 전용, 복합 문자열 "협상에의한계약-...")
+
+  사전규격 PPSSrch:
+    규격번호    : refNo
+    품명        : prdctClsfcNoNm
+    발주기관    : orderInsttNm / rlDminsttNm
+    등록일      : rcptDt
+    마감일시    : opninRgstClseDt
+    예산금액    : asignBdgtAmt
+    공고링크    : 필드 없음 → bfSpecRgstNo로 직접 URL 구성
+    첨부파일    : specDocFileUrl1 ~ specDocFileUrl5  (입찰공고와 다른 필드명)
+    계약/낙찰방법: 없음 (사전규격 단계이므로 미결정)
 """
 
 import logging
@@ -21,149 +41,324 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 
 from .base import BaseScraper, make_empty_announcement
+from core.ids import derive_stable_id
 
 logger = logging.getLogger(__name__)
 
-API_BASE = "https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc"
-DETAIL_BASE = "https://www.g2b.go.kr/pt/menu/selectSubFrame.do"
-NUM_OF_ROWS = 100
-MAX_PAGES = 10   # 최대 1,000건
+# ── API 엔드포인트 ─────────────────────────────────────────────────────────
+BID_NOTICE_URL = (
+    "https://apis.data.go.kr/1230000/ad/BidPublicInfoService"
+    "/getBidPblancListInfoServcPPSSrch"
+)
+PRE_STANDARD_URL = (
+    "https://apis.data.go.kr/1230000/ao/HrcspSsstndrdInfoService"
+    "/getPublicPrcureThngInfoServcPPSSrch"
+)
+# 사전규격 상세 링크 — bfSpecRgstNo로 직접 URL 구성
+PRE_STANDARD_DETAIL_BASE = "https://www.g2b.go.kr/pn/pnz/pnza/pubPrcureThng/detail.do?bfSpecRegNo={bfSpecRgstNo}"
+
+NUM_OF_ROWS = 100   # 페이지당 최대 100건
+MAX_PAGES = 10      # 페이지네이션 최대 10페이지 (최대 1,000건)
 
 
 class G2bScraper(BaseScraper):
     SOURCE_NAME = "나라장터"
     USE_PLAYWRIGHT_FOR_DETAIL = False
-    FETCH_DETAIL = False  # 첨부파일·링크 모두 API 응답에서 직접 수집
+    FETCH_DETAIL = False  # 모든 데이터를 API 응답에서 직접 수집
 
     def __init__(self, config: dict):
         super().__init__(config)
         self.api_key = config.get("api_keys", {}).get("g2b_api_key", "")
-        if not self.api_key or self.api_key == "YOUR_DATA_GO_KR_API_KEY":
+        if not self.api_key:
             logger.warning(
-                "[G2B] API 키가 설정되지 않았습니다. config.yaml의 api_keys.g2b_api_key를 설정하세요."
+                "[G2B] API 키가 설정되지 않았습니다. "
+                "scraper/.env 파일에 G2B_API_KEY를 입력하세요."
             )
-        _s = config.get("sites", {}).get("g2b", {})
-        self._api_base       = _s.get("api_base",       API_BASE)
-        self._max_pages      = _s.get("max_pages",      MAX_PAGES)
-        self._date_range_days = _s.get("date_range_days", 7)
+        g2b_cfg = config.get("sites", {}).get("g2b", {})
+        stages = g2b_cfg.get("stages", {})
+        self._do_bid_notice   = stages.get("bid_notice",   True)
+        self._do_pre_standard = stages.get("pre_standard", True)
+        self._date_range_days = g2b_cfg.get("date_range_days", 3)
+        self._search_keywords: list[str] = g2b_cfg.get("search_keywords", [])
+
+    # ──────────────────────────────────────────────────────────────────────
+    # 공개 인터페이스
+    # ──────────────────────────────────────────────────────────────────────
 
     def fetch_list(self) -> list[dict]:
-        if not self.api_key or self.api_key == "YOUR_DATA_GO_KR_API_KEY":
+        """키워드 × 단계 조합으로 PPSSrch를 호출하고, 중복을 제거해 반환한다."""
+        if not self.api_key:
             logger.error("[G2B] API 키 없음, 건너뜀")
+            return []
+
+        # ★ 검색어 최소 1개 필수 (planner 확정 사항)
+        if not self._search_keywords:
+            logger.error(
+                "[G2B] search_keywords가 비어 있습니다. "
+                "config.yaml → sites.g2b.search_keywords에 키워드를 1개 이상 입력하세요. "
+                "수집을 중단합니다."
+            )
             return []
 
         today = datetime.now()
         start = (today - timedelta(days=self._date_range_days)).strftime("%Y%m%d") + "0000"
         end   = today.strftime("%Y%m%d") + "2359"
 
+        all_items: list[dict] = []
+
+        if self._do_bid_notice:
+            logger.info("[G2B] 입찰공고 수집 시작 (키워드 %d개)", len(self._search_keywords))
+            for kw in self._search_keywords:
+                items = self._fetch_stage_all_pages(
+                    url=BID_NOTICE_URL,
+                    search_param="bidNtceNm",
+                    keyword=kw,
+                    start=start,
+                    end=end,
+                    parser=self._parse_bid_item,
+                    stage_label="입찰공고",
+                )
+                all_items.extend(items)
+
+        if self._do_pre_standard:
+            logger.info("[G2B] 사전규격 수집 시작 (키워드 %d개)", len(self._search_keywords))
+            for kw in self._search_keywords:
+                items = self._fetch_stage_all_pages(
+                    url=PRE_STANDARD_URL,
+                    search_param="prdctClsfcNoNm",
+                    keyword=kw,
+                    start=start,
+                    end=end,
+                    parser=self._parse_prestandard_item,
+                    stage_label="사전규격",
+                )
+                all_items.extend(items)
+
+        # (공고번호, 단계) 기준 중복 제거 — 같은 공고를 여러 키워드로 잡았을 때 처리
+        deduped = _deduplicate(all_items)
+        logger.info(
+            "[G2B] 합산 %d건 → 중복제거 후 %d건",
+            len(all_items), len(deduped),
+        )
+        return deduped
+
+    def fetch_detail(self, announcement: dict) -> dict:
+        # 첨부파일/링크를 API 응답에서 직접 수집하므로 추가 처리 불필요
+        return announcement
+
+    # ──────────────────────────────────────────────────────────────────────
+    # 내부 — 페이지네이션 처리
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _fetch_stage_all_pages(
+        self,
+        url: str,
+        search_param: str,
+        keyword: str,
+        start: str,
+        end: str,
+        parser,
+        stage_label: str,
+    ) -> list[dict]:
+        """단일 키워드에 대해 전 페이지를 순회하며 수집한다."""
         results: list[dict] = []
-        for page in range(1, self._max_pages + 1):
-            items, total = self._fetch_page(page, start, end)
+        for page in range(1, MAX_PAGES + 1):
+            items, total = self._fetch_one_page(
+                url=url,
+                search_param=search_param,
+                keyword=keyword,
+                start=start,
+                end=end,
+                page=page,
+                parser=parser,
+                stage_label=stage_label,
+            )
             results.extend(items)
-            logger.debug("[G2B] 페이지 %d: %d건 (전체 %d건)", page, len(items), total)
-            if len(results) >= total or not items:
+            logger.debug(
+                "[G2B][%s] 키워드='%s' 페이지%d: %d건 (전체 %d건)",
+                stage_label, keyword, page, len(items), total,
+            )
+            if not items or len(results) >= total:
                 break
             self._sleep()
-
         return results
 
-    def _fetch_page(self, page: int, start: str, end: str) -> tuple[list[dict], int]:
+    def _fetch_one_page(
+        self,
+        url: str,
+        search_param: str,
+        keyword: str,
+        start: str,
+        end: str,
+        page: int,
+        parser,
+        stage_label: str,
+    ) -> tuple[list[dict], int]:
+        """단일 페이지를 호출해 파싱 결과와 전체 건수를 반환한다."""
         params = {
             "serviceKey": self.api_key,
             "numOfRows": NUM_OF_ROWS,
             "pageNo": page,
             "type": "xml",
+            "inqryDiv": 1,
             "inqryBgnDt": start,
             "inqryEndDt": end,
-            "inqryDiv": 1,
+            search_param: keyword,
         }
         try:
-            resp = self._get(self._api_base, params=params)
+            resp = self._get(url, params=params)
         except Exception as exc:
-            logger.error("[G2B] API 요청 실패 (페이지 %d): %s", page, exc)
+            logger.error("[G2B][%s] API 요청 실패 (페이지 %d): %s", stage_label, page, exc)
             return [], 0
 
         try:
             root = ET.fromstring(resp.content)
         except ET.ParseError as exc:
-            logger.error("[G2B] XML 파싱 실패: %s\n응답: %s", exc, resp.text[:500])
+            logger.error(
+                "[G2B][%s] XML 파싱 실패: %s\n응답: %s",
+                stage_label, exc, resp.text[:300],
+            )
             return [], 0
 
-        # 에러 코드 확인
         result_code = _xml_text(root, ".//resultCode")
         if result_code and result_code != "00":
             result_msg = _xml_text(root, ".//resultMsg")
-            logger.error("[G2B] API 오류 %s: %s", result_code, result_msg)
+            logger.error("[G2B][%s] API 오류 %s: %s", stage_label, result_code, result_msg)
             return [], 0
 
         total_count = int(_xml_text(root, ".//totalCount") or "0")
-        items_el = root.findall(".//item")
-
         announcements: list[dict] = []
-        for item in items_el:
-            ann = self._parse_item(item)
+        for item_el in root.findall(".//item"):
+            ann = parser(item_el)
             if ann:
                 announcements.append(ann)
 
         return announcements, total_count
 
-    def _parse_item(self, item) -> dict | None:
+    # ──────────────────────────────────────────────────────────────────────
+    # 내부 — 단계별 파서 (스키마가 서로 다름)
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _parse_bid_item(self, item) -> dict | None:
+        """입찰공고 PPSSrch 응답 아이템 → 표준 공고 딕셔너리."""
         bid_no = _xml_text(item, "bidNtceNo")
-        title = _xml_text(item, "bidNtceNm")
+        title  = _xml_text(item, "bidNtceNm")
         if not title:
             return None
 
         ann = make_empty_announcement()
         ann["출처사이트"] = self.SOURCE_NAME
-        ann["공고번호"] = bid_no or ""
-        ann["공고명"] = title
+        ann["공고번호"]   = bid_no or ""
+        ann["공고명"]     = title
 
-        # 발주기관
         ann["발주기관"] = (
             _xml_text(item, "dminsttNm")
             or _xml_text(item, "ntceInsttNm")
             or "나라장터"
         )
 
-        # 공고일 (YYYYMMDD → YYYY-MM-DD)
-        reg_date = _xml_text(item, "bidNtceDt") or _xml_text(item, "rgstDt") or ""
-        ann["공고일"] = _format_date(reg_date)
-
-        # 마감일시
-        deadline = _xml_text(item, "bidClseDateTime") or _xml_text(item, "opengDateTime") or ""
-        ann["마감일시"] = _format_datetime(deadline)
+        # 공고일: bidNtceDt 는 "YYYY-MM-DD HH:MM:SS" 형태로 옴
+        ann["공고일"]   = _format_date(_xml_text(item, "bidNtceDt"))
+        # 마감일시: bidClseDt
+        ann["마감일시"] = _format_datetime(_xml_text(item, "bidClseDt"))
 
         # 예산금액
-        budget = _xml_text(item, "asignBdgtAmt") or _xml_text(item, "presmptPrce") or ""
-        if budget:
-            try:
-                ann["예산금액"] = f"{int(float(budget)):,}"
-            except ValueError:
-                ann["예산금액"] = budget
+        budget = _xml_text(item, "asignBdgtAmt")
+        ann["예산금액"] = _format_budget(budget)
 
-        # 공고 링크 — API가 제공하는 직접 링크 사용 (구 selectSubFrame.do URL은 404)
+        # 공고 링크
         ann["공고링크"] = _xml_text(item, "bidNtceDtlUrl") or _xml_text(item, "bidNtceUrl") or ""
 
-        # 첨부파일 URL — API 응답에 ntceSpecDocUrl1~10으로 직접 제공됨
+        # 내용요약 (API에 별도 설명 필드 없으므로 공고명 사용)
+        ann["내용요약"] = title
+
+        # 첨부파일 URL (ntceSpecDocUrl1~10)
         for i in range(1, 11):
             url = _xml_text(item, f"ntceSpecDocUrl{i}")
             if url:
                 ann["_attachment_urls"].append(url)
 
-        # 내용요약 (API에 없는 경우 공고명으로 대체)
-        ann["내용요약"] = _xml_text(item, "dtlBidNtceNm") or title
+        # 저장소 공개 필드
+        ann["단계"]      = "입찰공고"
+        ann["stable_id"] = derive_stable_id(self.SOURCE_NAME, ann["공고링크"])
 
-        # 카테고리코드 (필터링용, Excel에는 저장 안 함)
-        ann["카테고리코드"] = _xml_text(item, "bidClsfcNo") or ""
+        # 필터 전용 필드 (저장하지 않음)
+        ann["_단계"]     = "입찰공고"
+        ann["_계약방법"] = _xml_text(item, "cntrctCnclsMthdNm")
+        ann["_낙찰방법"] = _xml_text(item, "sucsfbidMthdNm")
+        ann["_예산금액"] = _parse_int(budget)  # 정수 (필터 비교용)
 
         return ann
 
-    def fetch_detail(self, announcement: dict) -> dict:
-        # 첨부파일 URL은 API 응답에서 직접 수집하므로 추가 처리 불필요
-        return announcement
+    def _parse_prestandard_item(self, item) -> dict | None:
+        """사전규격 PPSSrch 응답 아이템 → 표준 공고 딕셔너리."""
+        ref_no = _xml_text(item, "refNo")
+        title  = _xml_text(item, "prdctClsfcNoNm")  # 품명 = 사전규격의 공고명
+        if not title:
+            return None
+
+        ann = make_empty_announcement()
+        ann["출처사이트"] = self.SOURCE_NAME
+        ann["공고번호"]   = ref_no or ""
+        ann["공고명"]     = title
+
+        ann["발주기관"] = (
+            _xml_text(item, "orderInsttNm")
+            or _xml_text(item, "rlDminsttNm")
+            or "나라장터"
+        )
+
+        # 공고일: rcptDt (등록일)
+        ann["공고일"]   = _format_date(_xml_text(item, "rcptDt"))
+        # 마감일시: opninRgstClseDt (의견등록마감)
+        ann["마감일시"] = _format_datetime(_xml_text(item, "opninRgstClseDt"))
+
+        # 예산금액
+        budget = _xml_text(item, "asignBdgtAmt")
+        ann["예산금액"] = _format_budget(budget)
+
+        # 공고 링크: 사전규격은 bidNtceDtlUrl 없음 → bfSpecRgstNo로 직접 구성
+        bfsrn = _xml_text(item, "bfSpecRgstNo")
+        if bfsrn:
+            ann["공고링크"] = PRE_STANDARD_DETAIL_BASE.format(bfSpecRgstNo=bfsrn)
+        else:
+            ann["공고링크"] = ""
+
+        # 내용요약
+        ann["내용요약"] = title
+
+        # 첨부파일 URL (specDocFileUrl1~5 — 입찰공고와 다른 필드명)
+        for i in range(1, 6):
+            url = _xml_text(item, f"specDocFileUrl{i}")
+            if url:
+                ann["_attachment_urls"].append(url)
+
+        # 저장소 공개 필드
+        ann["단계"]      = "사전규격"
+        ann["stable_id"] = derive_stable_id(self.SOURCE_NAME, ann["공고링크"])
+
+        # 필터 전용 필드 — 사전규격은 계약/낙찰방법이 미결정 단계라 빈 값
+        ann["_단계"]     = "사전규격"
+        ann["_계약방법"] = ""
+        ann["_낙찰방법"] = ""
+        ann["_예산금액"] = _parse_int(budget)
+
+        return ann
 
 
-# ─── 헬퍼 함수 ────────────────────────────────────────────
+# ── 헬퍼 함수 ────────────────────────────────────────────────────────────
+
+def _deduplicate(items: list[dict]) -> list[dict]:
+    """(공고번호, _단계) 기준으로 중복을 제거한다. 먼저 나온 항목을 유지."""
+    seen: set[tuple] = set()
+    result: list[dict] = []
+    for item in items:
+        key = (item.get("공고번호", ""), item.get("_단계", ""))
+        if key not in seen:
+            seen.add(key)
+            result.append(item)
+    return result
+
 
 def _xml_text(element, tag: str) -> str:
     el = element.find(tag)
@@ -171,18 +366,38 @@ def _xml_text(element, tag: str) -> str:
 
 
 def _format_date(s: str) -> str:
-    """YYYYMMDD → YYYY-MM-DD"""
-    s = re.sub(r"[^\d]", "", s)
-    if len(s) >= 8:
-        return f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+    """YYYYMMDD 또는 YYYY-MM-DD HH:MM:SS → YYYY-MM-DD"""
+    digits = re.sub(r"[^\d]", "", s)
+    if len(digits) >= 8:
+        return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
     return s
 
 
 def _format_datetime(s: str) -> str:
-    """YYYYMMDDHHMM 또는 YYYY-MM-DD HH:MM → YYYY-MM-DD HH:MM"""
-    s_clean = re.sub(r"[^\d]", "", s)
-    if len(s_clean) >= 12:
-        return f"{s_clean[:4]}-{s_clean[4:6]}-{s_clean[6:8]} {s_clean[8:10]}:{s_clean[10:12]}"
-    if len(s_clean) >= 8:
-        return f"{s_clean[:4]}-{s_clean[4:6]}-{s_clean[6:8]}"
+    """YYYYMMDDHHMM 또는 YYYY-MM-DD HH:MM(:SS) → YYYY-MM-DD HH:MM"""
+    digits = re.sub(r"[^\d]", "", s)
+    if len(digits) >= 12:
+        return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]} {digits[8:10]}:{digits[10:12]}"
+    if len(digits) >= 8:
+        return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
     return s
+
+
+def _format_budget(raw: str) -> str:
+    """예산 금액 문자열을 천 단위 쉼표 형식으로 변환한다."""
+    if not raw:
+        return ""
+    try:
+        return f"{int(float(raw)):,}"
+    except (ValueError, TypeError):
+        return raw
+
+
+def _parse_int(raw: str) -> int | None:
+    """예산 문자열을 정수로 변환한다. 변환 불가 시 None."""
+    if not raw:
+        return None
+    try:
+        return int(float(raw))
+    except (ValueError, TypeError):
+        return None

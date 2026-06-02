@@ -23,11 +23,11 @@ from pathlib import Path
 
 from core.runner import run_site, load_config, save_tmp_json, load_tmp_json
 from core.scheduler import run_once, _run_schedule, run_debug, run_debug_detail, setup_logging
-from core.excel_writer import save_announcements
+from core.json_store import upsert as json_upsert
 
 _ALL_SITES = ["nipa", "mss", "g2b", "nia", "etri"]
 _DEFAULT_CONFIG = Path(__file__).parent / "config.yaml"
-_LOG_DIR = Path(__file__).parent / "logs"
+_LOG_DIR = Path(__file__).parent.parent / "logs"
 _TMP_DIR = Path(__file__).parent / "output" / "tmp"
 
 
@@ -54,11 +54,12 @@ def _run_single(site_key: str, config: dict) -> None:
     logger.info("[%s] 단독 실행 시작", site_key.upper())
 
     filtered, stat = run_site(site_key, config)
-    added = save_announcements(filtered, config, sheet_name=stat["사이트"]) if filtered else 0
+    result = json_upsert(filtered, config) if filtered else {"신규": 0, "갱신": 0}
 
     logger.info(
-        "[%s] 완료 — 수집: %d건, 필터: %d건, 첨부: %d개, Excel 신규: %d건",
-        site_key.upper(), stat["수집"], stat["필터"], stat["첨부"], added,
+        "[%s] 완료 / 수집: %d건, 필터: %d건, 첨부: %d개, 신규: %d건, 갱신: %d건",
+        site_key.upper(), stat["수집"], stat["필터"], stat["첨부"],
+        result["신규"], result["갱신"],
     )
     logger.info("=" * 60)
 
@@ -89,13 +90,15 @@ def _run_parallel(sites: list[str], config: dict) -> None:
                 logger.error("[%s] 워커 실패: %s", key.upper(), exc)
                 site_stats.append({"사이트": key, "수집": 0, "필터": 0, "첨부": 0, "오류": True})
 
-    excel_added = 0
+    total_new = 0
+    total_update = 0
     for key in sites:
         announcements = load_tmp_json(key, _TMP_DIR)
         if not announcements:
             continue
-        sheet_name = announcements[0].get("출처사이트", key)
-        excel_added += save_announcements(announcements, config, sheet_name=sheet_name)
+        result = json_upsert(announcements, config)
+        total_new += result["신규"]
+        total_update += result["갱신"]
         (_TMP_DIR / f"{key}.json").unlink(missing_ok=True)
 
     bar = "-" * 60
@@ -107,12 +110,13 @@ def _run_parallel(sites: list[str], config: dict) -> None:
         logger.info("%-16s %5d건  %5d건  %5d개%s", s["사이트"], s["수집"], s["필터"], s["첨부"], flag)
     logger.info(bar)
     logger.info(
-        "%-16s %5d건  %5d건  %5d개  (Excel 신규: %d건)",
+        "%-16s %5d건  %5d건  %5d개  (신규 %d건 / 갱신 %d건)",
         "합계",
         sum(s["수집"] for s in site_stats),
         sum(s["필터"] for s in site_stats),
         sum(s["첨부"] for s in site_stats),
-        excel_added,
+        total_new,
+        total_update,
     )
     logger.info(bar)
     logger.info("=" * 60)

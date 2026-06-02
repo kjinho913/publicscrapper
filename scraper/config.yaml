@@ -1,11 +1,12 @@
 sources:
-  nipa: true # 정보통신산업진흥원 https://www.nipa.kr
-  mss: true # 중소벤처기업부     https://www.mss.go.kr
+  nipa: false # 정보통신산업진흥원 https://www.nipa.kr
+  mss: false # 중소벤처기업부     https://www.mss.go.kr
   g2b: true # 나라장터           https://www.g2b.go.kr
-  nia: true # 한국지능정보사회진흥원 https://www.nia.or.kr
-  etri: true # 한국전자통신연구원  https://ebid.etri.re.kr
+  nia: false # 한국지능정보사회진흥원 https://www.nia.or.kr
+  etri: false # 한국전자통신연구원  https://ebid.etri.re.kr
 
 filters:
+  # 나라장터(g2b) 이외 사이트(nipa/nia/mss/etri)에 적용되는 공통 키워드 필터
   keywords:
     - "AI"
     - "인공지능"
@@ -50,31 +51,60 @@ sites:
   nipa:
     list_url: "https://www.nipa.kr/home/bsnsAll/0/nttList?bbsNo=4&bsnsDtlsIemNo=&tab=2"
     page_param: "curPage"
-    max_pages: 5
+    max_pages: 1
   mss:
     list_url: "https://www.mss.go.kr/site/smba/ex/bbs/List.do?cbIdx=310"
     page_param: "currentPage"
-    max_pages: 5
+    max_pages: 1
   g2b:
-    api_base: "https://apis.data.go.kr/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc"
-    max_pages: 10
-    date_range_days: 7 # 스크랩 실행일 기준 며칠 전 공고부터 수집할지
-    filters: # 나라장터 전용 제외 키워드 (전역 설정에 병합됨)
-      exclude_keywords:
-        - "물품구매"
-        - "시설공사"
-        - "청소"
-        - "경비"
-        - "수리"
-        - "인쇄"
+    # ── 수집 단계 선택 ────────────────────────────────────────
+    # true: 해당 단계 수집, false: 건너뜀
+    stages:
+      bid_notice:   true   # 입찰공고  — 계약 발주 단계
+      pre_standard: true   # 사전규격  — 입찰 전 규격 공개 단계
+
+    # 수집 기간 (오늘 기준 N일 전까지의 공고를 가져옴)
+    date_range_days: 3
+
+    # ── 서버 검색 키워드 (API에 전달, OR 결합) ──────────────
+    # 최소 1개 필수. 비워두면 실행이 거부됩니다.
+    # 예: "인공지능", "AI", "데이터" 중 하나라도 공고명/품명에 포함되면 수집
+    search_keywords:
+      - "인공지능"
+      - "AI"
+      - "데이터"
+
+    # ── 제외 키워드 (로컬 필터, 포함 키워드보다 우선) ───────
+    # 공고명 또는 품명에 이 단어가 있으면 결과에서 제외합니다.
+    exclude_keywords:
+      - "청소"
+      - "경비"
+
+    # ── 계약방법 허용 목록 (입찰공고 전용) ─────────────────
+    # 비워두면([] 또는 생략) 모든 계약방법 통과.
+    # 가능한 값: 일반경쟁 / 제한경쟁 / 수의계약
+    contract_methods: []
+
+    # ── 낙찰방법 허용 목록 (입찰공고 전용, 부분일치) ────────
+    # 비워두면 모든 낙찰방법 통과.
+    # 실제 API 값은 "협상에의한계약-협상에 의한 계약" 형태의 복합 문자열이므로
+    # 여기 입력한 값이 그 안에 포함되어 있으면 매칭됩니다.
+    award_methods:
+      - "협상에의한계약"
+
+    # ── 예산 범위 필터 (원 단위, 로컬 필터) ────────────────
+    # null 이면 해당 방향 제한 없음.
+    # 예: budget_min: 50000000  → 5천만원 미만 공고 제외
+    budget_min: null
+    budget_max: null
   nia:
     list_url: "https://www.nia.or.kr/site/nia_kor/ex/bbs/List.do?cbIdx=78336"
     page_param: "currentPage"
-    max_pages: 5
+    max_pages: 1
   etri:
     list_url: "https://ebid.etri.re.kr/ebid/ebid/nSsEbidbulletinListPopup.do"
     page_param: "pageNo"
-    max_pages: 5
+    max_pages: 1
 
 request:
   timeout: 30 # 초

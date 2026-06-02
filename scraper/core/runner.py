@@ -14,8 +14,8 @@ import yaml
 from dotenv import load_dotenv
 
 from core.downloader import download_attachments
-from core.excel_writer import get_existing_announcement_keys
-from core.filters import matches
+from core.json_store import existing_ids as get_existing_ids
+from core.filters import matches, refine_g2b
 from core.scrapers import NipaScraper, MssScraper, G2bScraper, NiaScraper, EtriScraper
 
 try:
@@ -89,6 +89,9 @@ def run_site(site_key: str, config: dict) -> tuple[list[dict], dict]:
     site_filter_override = config.get("sites", {}).get(site_key, {}).get("filters", {})
     filter_cfg = {**global_filter, **site_filter_override} if site_filter_override else global_filter
 
+    # 나라장터 전용 필터 설정 (refine_g2b에서 사용)
+    g2b_cfg = config.get("sites", {}).get("g2b", {}) if site_key == "g2b" else None
+
     scraper = cls(config)
     source = scraper.SOURCE_NAME
     stat = {"사이트": source, "수집": 0, "필터": 0, "첨부": 0, "오류": False}
@@ -114,15 +117,33 @@ def run_site(site_key: str, config: dict) -> tuple[list[dict], dict]:
             pw.sync_cookies_to_session(scraper.session)
 
         stat["수집"] = len(announcements)
-        filtered = [a for a in announcements if matches(a, filter_cfg)]
+        # 나라장터는 refine_g2b() 전용 필터 사용; 나머지 사이트는 기존 matches() 유지
+        if site_key == "g2b" and g2b_cfg is not None:
+            filtered = [a for a in announcements if refine_g2b(a, g2b_cfg)]
+        else:
+            filtered = [a for a in announcements if matches(a, filter_cfg)]
         stat["필터"] = len(filtered)
         logger.info("[%s] 수집 %d건 → 필터 후 %d건", source, len(announcements), len(filtered))
 
-        if att_enabled:
-            existing_keys = get_existing_announcement_keys(config)
+        if site_key == "g2b":
+            # [g2b 전용] 수집 시 자동 다운로드하지 않음 — URL만 레코드에 보관.
+            # 다운로드는 대시보드 버튼 클릭 시 수행 (ADR-004 2단계).
+            for ann in filtered:
+                raw_urls = ann.pop("_attachment_urls", [])
+                attachment_urls = list(dict.fromkeys(
+                    u for u in raw_urls
+                    if u and not u.startswith("javascript")
+                ))
+                ann["첨부URL목록"] = attachment_urls
+                # stat["첨부"]는 0 유지 (다운로드 없음)
+        elif att_enabled:
+            # [비g2b 사이트] 기존 자동 다운로드 동작 유지
+            existing_stable_ids = get_existing_ids(config)
             date_str = datetime.now().strftime("%Y-%m-%d")
             for ann in filtered:
-                if (str(ann.get("공고번호", "")), str(ann.get("출처사이트", ""))) in existing_keys:
+                # stable_id 기준으로 이미 수집된 공고는 첨부파일 재다운로드 건너뜀
+                sid = ann.get("stable_id", "")
+                if sid and sid in existing_stable_ids:
                     ann.pop("_attachment_urls", None)
                     continue
                 urls = list(dict.fromkeys(
