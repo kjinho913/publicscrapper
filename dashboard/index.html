@@ -527,6 +527,13 @@
       <option value="검토완료">검토완료</option>
     </select>
 
+    <label for="stage-filter">단계:</label>
+    <select id="stage-filter">
+      <option value="">전체</option>
+      <option value="입찰공고">입찰공고</option>
+      <option value="사전규격">사전규격</option>
+    </select>
+
     <button id="toggle-analyzed">분석완료만 보기</button>
     <button id="refresh-btn" style="margin-left:auto;">새로고침</button>
   </div>
@@ -655,6 +662,7 @@ let allItems         = [];        // 전체 공고 목록 (서버에서 로드)
 let showAnalyzedOnly = false;
 let selectedField    = "";
 let selectedStatus   = "";
+let selectedStage    = "";
 
 // stable_id → setInterval 핸들 (폴링 관리)
 const pollingMap = {};
@@ -826,6 +834,7 @@ function getFiltered() {
       if (showAnalyzedOnly && !item.analyzed) return false;
       if (selectedField  && item.field !== selectedField)             return false;
       if (selectedStatus && item["판단상태"] !== selectedStatus)      return false;
+      if (selectedStage  && item["단계"] !== selectedStage)           return false;
       return true;
     })
     .sort(deadlineSort);
@@ -899,10 +908,12 @@ function renderTable() {
     }
   });
 
-  const analyzedCnt = filtered.filter(i => i.analyzed).length;
-  const readyCnt    = filtered.filter(i => i["판단상태"] === "분석대기").length;
+  const analyzedCnt  = filtered.filter(i => i.analyzed).length;
+  const readyCnt     = filtered.filter(i => i["판단상태"] === "분석대기").length;
+  const bidCnt       = filtered.filter(i => i["단계"] === "입찰공고").length;
+  const preCnt       = filtered.filter(i => i["단계"] === "사전규격").length;
   document.getElementById("stats").textContent =
-    `표시: ${filtered.length}건 | 분석완료: ${analyzedCnt}건 | 분석대기: ${readyCnt}건 | 전체: ${allItems.length}건`;
+    `표시: ${filtered.length}건 (입찰공고 ${bidCnt} / 사전규격 ${preCnt}) | 분석완료: ${analyzedCnt}건 | 분석대기: ${readyCnt}건 | 전체: ${allItems.length}건`;
 
   hideDetail();
 }
@@ -985,6 +996,11 @@ document.getElementById("field-filter").addEventListener("change", function() {
 
 document.getElementById("status-filter").addEventListener("change", function() {
   selectedStatus = this.value;
+  renderTable();
+});
+
+document.getElementById("stage-filter").addEventListener("change", function() {
+  selectedStage = this.value;
   renderTable();
 });
 
