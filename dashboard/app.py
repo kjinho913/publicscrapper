@@ -26,7 +26,8 @@ import threading
 from pathlib import Path
 
 import markdown as _markdown  # pip install markdown (서버사이드 마크다운→HTML 변환)
-from flask import Flask, jsonify, send_from_directory, abort
+import re as _re
+from flask import Flask, jsonify, send_from_directory, abort, request
 
 # ── 경로 설정 ────────────────────────────────────────────────────────────────
 _APP_DIR = Path(__file__).parent.resolve()       # dashboard/
@@ -194,7 +195,8 @@ def api_announcements():
     announcements.json + analysis/ result.md 파생 정보를 합쳐 목록을 반환한다.
     """
     items = datasource.load_announcements()
-    return jsonify({"items": items, "total": len(items)})
+    keywords = datasource.load_search_keywords()
+    return jsonify({"items": items, "total": len(items), "keywords": keywords})
 
 
 @app.route("/api/download/<stable_id>", methods=["POST"])
@@ -299,9 +301,62 @@ def api_report(stable_id: str):
         logger.error("result.md 읽기 실패 (%s): %s", stable_id, e)
         abort(500, description="리포트 읽기에 실패했습니다.")
 
-    # 마크다운 → HTML 변환 (tables 확장: 표 지원 / nl2br 비활성화)
+    # ── 전처리: 구형 형식 감지 후 조건부 보정 ──────────────────────────────
+    # 클린 마크다운(## 헤더 존재, 균일 들여쓰기 없음): 전처리 없이 그대로 변환.
+    # 구형 형식(7-space 균일 들여쓰기 또는 박스 문자 표): 기존 보정 로직 적용.
+    #
+    # 클린 마크다운 판정 기준:
+    #   - "##" 로 시작하는 줄이 1개 이상 존재    (마크다운 헤더)
+    #   - 5칸 이상 들여쓰기로 시작하는 줄이 전체의 30% 미만  (균일 들여쓰기 아님)
+    _BOX_FIRST = set("┌┐└┘├┤┬┴┼│─")
+    _lines_all = md_text.split("\n")
+    _has_md_header = any(ln.startswith("##") for ln in _lines_all)
+    _indented_count = sum(1 for ln in _lines_all if _re.match(r"^ {5,}", ln))
+    _indent_ratio = _indented_count / max(len(_lines_all), 1)
+    _is_clean = _has_md_header and (_indent_ratio < 0.30)
+
+    if _is_clean:
+        # 클린 마크다운: 전처리 없이 그대로 사용. 파이프 표는 tables 확장으로 렌더됨.
+        md_clean = md_text
+    else:
+        # 구형 형식: 기존 band-aid 보정 적용
+        md_lines = _lines_all
+        md_lines = [_re.sub(r"^ {1,8}", "", line) for line in md_lines]
+        md_clean = "\n".join(md_lines)
+
+        # '---\nExecutive Summary' → '## Executive Summary'
+        md_clean = _re.sub(r"---\s*\n\s*(Executive Summary)", r"## \1", md_clean)
+        # '---\n숫자. 제목' → '## 숫자. 제목'
+        md_clean = _re.sub(r"---\s*\n\s*(\d+\.\s)", r"## \1", md_clean)
+        # '▎ 텍스트' → '> 텍스트' (blockquote)
+        md_clean = _re.sub(r"^▎\s*", "> ", md_clean, flags=_re.MULTILINE)
+        # '숫자-A. 제목' 형태의 서브섹션 → '### 제목'
+        md_clean = _re.sub(r"^(\d+-[A-Z0-9]\.\s)", r"### \1", md_clean, flags=_re.MULTILINE)
+
+        # 박스 드로잉 문자(┌┐└┘├┤┬┴┼│─) 표를 fenced code 블록으로 감싸
+        # 고정폭 폰트로 렌더링한다.
+        out_lines = []
+        in_box = False
+        for line in md_clean.split("\n"):
+            stripped = line.strip()
+            is_box = bool(stripped) and stripped[0] in _BOX_FIRST
+            if is_box:
+                if not in_box:
+                    out_lines.append("```")
+                    in_box = True
+                out_lines.append(line)
+            else:
+                if in_box:
+                    out_lines.append("```")
+                    in_box = False
+                out_lines.append(line)
+        if in_box:
+            out_lines.append("```")
+        md_clean = "\n".join(out_lines)
+
+    # ── 마크다운 → HTML 변환 ─────────────────────────────────────────────
     html_body = _markdown.markdown(
-        md_text,
+        md_clean,
         extensions=["tables", "fenced_code"],
     )
 
@@ -313,6 +368,64 @@ def api_report(stable_id: str):
         "summary":   analysis["summary"],
         "field":     analysis["field"],
     })
+
+
+_VALID_STATUSES = {"미검토", "관심", "참여검토", "제외"}
+
+
+@app.route("/api/announcement/<stable_id>/delete", methods=["POST"])
+def api_delete(stable_id: str):
+    """
+    POST /api/announcement/<stable_id>/delete
+
+    해당 공고를 소프트 삭제(삭제됨=true)한다.
+    재수집 시에도 삭제 상태가 유지된다(부활 방지).
+    """
+    rec = datasource.get_record(stable_id)
+    if rec is None:
+        abort(404, description=f"공고를 찾을 수 없습니다: {stable_id}")
+
+    _update_record(stable_id, {"삭제됨": True})
+    logger.info("[DELETE] 소프트 삭제: %s", stable_id)
+    return jsonify({"stable_id": stable_id, "삭제됨": True}), 200
+
+
+@app.route("/api/announcement/<stable_id>/restore", methods=["POST"])
+def api_restore(stable_id: str):
+    """
+    POST /api/announcement/<stable_id>/restore
+
+    소프트 삭제된 공고를 복원(삭제됨=false)한다.
+    """
+    rec = datasource.get_record(stable_id)
+    if rec is None:
+        abort(404, description=f"공고를 찾을 수 없습니다: {stable_id}")
+
+    _update_record(stable_id, {"삭제됨": False})
+    logger.info("[RESTORE] 복원: %s", stable_id)
+    return jsonify({"stable_id": stable_id, "삭제됨": False}), 200
+
+
+@app.route("/api/announcement/<stable_id>/status", methods=["POST"])
+def api_set_status(stable_id: str):
+    """
+    POST /api/announcement/<stable_id>/status
+    Body: {"판단상태": "미검토" | "관심" | "참여검토" | "제외"}
+
+    판단상태를 인라인으로 변경한다.
+    """
+    rec = datasource.get_record(stable_id)
+    if rec is None:
+        abort(404, description=f"공고를 찾을 수 없습니다: {stable_id}")
+
+    body = request.get_json(silent=True) or {}
+    new_status = body.get("판단상태", "")
+    if new_status not in _VALID_STATUSES:
+        abort(400, description=f"유효하지 않은 판단상태입니다: {new_status!r}. 허용값: {sorted(_VALID_STATUSES)}")
+
+    _update_record(stable_id, {"판단상태": new_status})
+    logger.info("[STATUS] 판단상태 변경: %s → %s", stable_id, new_status)
+    return jsonify({"stable_id": stable_id, "판단상태": new_status}), 200
 
 
 @app.route("/api/pending-analysis")

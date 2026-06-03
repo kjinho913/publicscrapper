@@ -51,7 +51,7 @@
       padding: 10px 20px;
       font-size: 14px;
       font-weight: 600;
-      color: #888;
+      color: #555;
       background: none;
       border: none;
       border-bottom: 3px solid transparent;
@@ -61,11 +61,12 @@
     }
 
     .tab-btn.active {
-      color: #2563eb;
-      border-bottom-color: #2563eb;
+      color: #1d4ed8;
+      border-bottom-color: #1d4ed8;
+      background: #eff6ff;
     }
 
-    .tab-btn:hover:not(.active) { color: #444; background: none; }
+    .tab-btn:hover:not(.active) { color: #222; background: #f0f0f0; }
 
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
@@ -152,6 +153,16 @@
       white-space: nowrap;
     }
 
+    th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    th.sortable:hover { background: #e4e8f2; }
+
+    th.sort-asc::after  { content: " ▲"; color: #2563eb; }
+    th.sort-desc::after { content: " ▼"; color: #2563eb; }
+
     td {
       padding: 9px 12px;
       border-bottom: 1px solid #f0f0f0;
@@ -231,6 +242,53 @@
       cursor: default;
     }
 
+    /* ── 판단상태 드롭다운 ── */
+    .status-select {
+      padding: 2px 6px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 12px;
+      background: #fff;
+      cursor: pointer;
+    }
+
+    .status-select.st-미검토   { border-color: #9ca3af; color: #374151; }
+    .status-select.st-관심     { border-color: #2563eb; color: #1d4ed8; background: #eff6ff; }
+    .status-select.st-참여검토 { border-color: #059669; color: #065f46; background: #d1fae5; }
+    .status-select.st-제외     { border-color: #d1d5db; color: #9ca3af; background: #f3f4f6; }
+
+    /* ── 삭제 버튼 ── */
+    .del-btn {
+      font-size: 13px;
+      padding: 2px 6px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      color: #9ca3af;
+      border-radius: 4px;
+      line-height: 1;
+    }
+
+    .del-btn:hover { color: #dc2626; background: #fef2f2; }
+
+    .restore-btn {
+      font-size: 11px;
+      padding: 2px 8px;
+      border: 1px solid #059669;
+      background: #d1fae5;
+      color: #065f46;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .restore-btn:hover { background: #a7f3d0; }
+
+    /* ── 삭제된 행 ── */
+    tbody tr.deleted-row { opacity: 0.5; background: #fafafa; }
+    tbody tr.deleted-row td { color: #9ca3af; text-decoration: line-through; }
+    tbody tr.deleted-row td:last-child,
+    tbody tr.deleted-row td:nth-last-child(2) { text-decoration: none; }
+
     /* ── 마감일 강조 ── */
     .deadline-urgent { color: #dc2626; font-weight: 600; }
 
@@ -296,6 +354,23 @@
     #error-msg { color: #dc2626; }
 
     /* ── 탭2: 분석 리포트 레이아웃 ── */
+
+    /* RFP 템플릿 디자인 토큰 (탭2 리포트 뷰어 전용) */
+    #tab2 {
+      --rp-navy:      #1a2e4a;
+      --rp-blue:      #1e5fa8;
+      --rp-accent:    #2575d0;
+      --rp-lbg:       #e8f0fb;
+      --rp-red:       #c0392b;
+      --rp-yellow:    #d4a017;
+      --rp-green:     #1a7a4a;
+      --rp-bg:        #f5f7fa;
+      --rp-card:      #ffffff;
+      --rp-border:    #dde3ec;
+      --rp-text:      #1e2733;
+      --rp-muted:     #5a6475;
+    }
+
     #tab2 .section-title {
       font-size: 15px;
       font-weight: 700;
@@ -349,65 +424,214 @@
       overflow: hidden;
     }
 
-    /* 리포트 상세 뷰어 */
+    /* ── 리포트 상세 뷰어 컨테이너 ── */
     #report-viewer {
       display: none;
-      margin: 0 24px 20px;
-      background: #fff;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      padding: 24px 28px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin: 0 24px 28px;
+      background: var(--rp-bg, #f5f7fa);
+      border: 1px solid var(--rp-border, #dde3ec);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 3px 12px rgba(26,46,74,0.10);
     }
 
+    /* 뷰어 상단 헤더 바 (공고명 + 닫기) */
     #report-viewer-header {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      margin-bottom: 16px;
       gap: 16px;
+      background: linear-gradient(135deg, var(--rp-navy, #1a2e4a) 0%, #243b6e 60%, var(--rp-blue, #1e5fa8) 100%);
+      color: #fff;
+      padding: 22px 28px 20px;
     }
 
     #report-viewer-title {
-      font-size: 15px;
-      font-weight: 700;
-      color: #1a1a2e;
+      font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
       flex: 1;
+      line-height: 1.45;
     }
 
     #report-close {
       flex-shrink: 0;
       font-size: 18px;
-      background: none;
-      border: none;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.30);
+      border-radius: 50%;
       cursor: pointer;
-      color: #888;
-      padding: 0;
-      line-height: 1;
+      color: #fff;
+      padding: 2px 7px;
+      line-height: 1.3;
+      transition: background 0.15s;
     }
 
-    #report-close:hover { color: #333; background: none; }
+    #report-close:hover { background: rgba(255,255,255,0.28); color: #fff; }
 
-    /* 마크다운 렌더링 영역 */
-    #report-body {
-      font-size: 13px;
+    /* ── 리포트 본문 스크롤 영역 ── */
+    #report-body-wrap {
+      max-height: 78vh;
+      overflow-y: auto;
+      padding: 28px 36px 36px;
+      background: var(--rp-card, #fff);
+      font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+      font-size: 13.5px;
+      line-height: 1.8;
+      color: var(--rp-text, #1e2733);
+    }
+
+    /* ── 마크다운 렌더링 요소별 스타일 ── */
+
+    /* h1: 파일 맨 위 공고명 헤더 (잘 나타나지 않으나 대비) */
+    #report-body h1 {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--rp-navy, #1a2e4a);
+      margin: 0 0 20px;
+      padding-bottom: 12px;
+      border-bottom: 3px solid var(--rp-blue, #1e5fa8);
+    }
+
+    /* h2: 섹션 헤더 (1.기본정보 ~ 9.수주전략, Executive Summary) */
+    #report-body h2 {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--rp-navy, #1a2e4a);
+      margin: 32px 0 14px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--rp-blue, #1e5fa8);
+    }
+
+    /* Executive Summary h2에 강조 배경 부여 */
+    #report-body h2.exec-heading {
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: #fff;
+      border-radius: 8px 8px 0 0;
+      padding: 14px 20px 12px;
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+
+    /* exec-box 내 단락 스타일 */
+    #report-body div.exec-box {
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      border-radius: 0 0 8px 8px;
+      padding: 12px 20px 16px;
+      margin-bottom: 28px;
+      box-shadow: 0 4px 18px rgba(30,63,114,0.18);
+    }
+
+    #report-body div.exec-box p {
+      color: #e8f0fb;
+      margin: 0 0 8px;
       line-height: 1.75;
-      color: #333;
+      font-size: 13px;
     }
 
-    #report-body h1 { font-size: 18px; font-weight: 700; margin: 20px 0 10px; color: #1a1a2e; }
-    #report-body h2 { font-size: 15px; font-weight: 700; margin: 18px 0 8px; color: #1e3a8a; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
-    #report-body h3 { font-size: 13px; font-weight: 700; margin: 14px 0 6px; color: #374151; }
-    #report-body p  { margin: 0 0 10px; }
-    #report-body ul, #report-body ol { margin: 0 0 10px 20px; }
-    #report-body li { margin-bottom: 3px; }
-    #report-body table { border-collapse: collapse; width: 100%; margin: 10px 0 16px; font-size: 12px; }
-    #report-body th { background: #f0f2f8; padding: 7px 10px; border: 1px solid #d1d5db; font-weight: 600; text-align: left; white-space: nowrap; }
-    #report-body td { padding: 6px 10px; border: 1px solid #e5e7eb; vertical-align: top; }
-    #report-body blockquote { border-left: 3px solid #2563eb; margin: 10px 0; padding: 8px 14px; background: #f0f4ff; color: #374151; border-radius: 0 4px 4px 0; }
-    #report-body code { background: #f3f4f6; border-radius: 3px; padding: 1px 5px; font-family: monospace; font-size: 12px; }
-    #report-body pre code { display: block; padding: 10px; overflow-x: auto; }
-    #report-body strong { color: #111; }
+    #report-body div.exec-box p:last-child { margin-bottom: 0; }
+
+    /* h3: 서브섹션 (1-A, 3-1, 3-2 등) */
+    #report-body h3 {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--rp-blue, #1e5fa8);
+      margin: 20px 0 8px;
+      padding-left: 10px;
+      border-left: 3px solid var(--rp-accent, #2575d0);
+    }
+
+    /* 단락 */
+    #report-body p { margin: 0 0 10px; }
+
+    /* 목록 */
+    #report-body ul, #report-body ol { margin: 0 0 10px 22px; }
+    #report-body li { margin-bottom: 4px; }
+
+    /* blockquote: ▎ 원문 인용 / 주석 */
+    #report-body blockquote {
+      border-left: 4px solid var(--rp-accent, #2575d0);
+      margin: 14px 0;
+      padding: 10px 16px;
+      background: var(--rp-lbg, #e8f0fb);
+      color: #2a3a5c;
+      border-radius: 0 6px 6px 0;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    /* pre/code: 박스 드로잉 표 (고정폭 렌더) */
+    #report-body pre {
+      background: #f8f9fc;
+      border: 1px solid var(--rp-border, #dde3ec);
+      border-radius: 6px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      margin: 10px 0 18px;
+    }
+
+    #report-body pre code {
+      font-family: 'D2Coding', 'Consolas', 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--rp-text, #1e2733);
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      white-space: pre;
+    }
+
+    /* 인라인 code */
+    #report-body code {
+      background: var(--rp-lbg, #e8f0fb);
+      color: var(--rp-blue, #1e5fa8);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: 'D2Coding', 'Consolas', monospace;
+      font-size: 12px;
+    }
+
+    /* 마크다운 표 (| 구분 형식) */
+    #report-body table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0 18px;
+      font-size: 12.5px;
+      box-shadow: 0 1px 4px rgba(26,46,74,0.07);
+    }
+
+    #report-body thead tr {
+      background: var(--rp-navy, #1a2e4a);
+    }
+
+    #report-body th {
+      color: #fff;
+      padding: 9px 12px;
+      border: 1px solid var(--rp-blue, #1e5fa8);
+      font-weight: 700;
+      text-align: left;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+
+    #report-body td {
+      padding: 7px 12px;
+      border: 1px solid var(--rp-border, #dde3ec);
+      vertical-align: top;
+    }
+
+    #report-body tbody tr:nth-child(even) {
+      background: var(--rp-lbg, #e8f0fb);
+    }
+
+    #report-body tbody tr:hover { background: #d6e4f7; }
+
+    /* strong */
+    #report-body strong { color: var(--rp-navy, #1a2e4a); font-weight: 700; }
 
     /* 분석 대기 섹션 */
     #pending-list {
@@ -514,8 +738,8 @@
 <div id="tab1" class="tab-panel active">
 
   <div class="controls">
-    <label for="field-filter">분야:</label>
-    <select id="field-filter">
+    <label for="keyword-filter">검색어:</label>
+    <select id="keyword-filter">
       <option value="">전체</option>
     </select>
 
@@ -535,6 +759,7 @@
     </select>
 
     <button id="toggle-analyzed">분석완료만 보기</button>
+    <button id="toggle-deleted">삭제된 항목 보기</button>
     <button id="refresh-btn" style="margin-left:auto;">새로고침</button>
   </div>
 
@@ -547,15 +772,16 @@
       <thead>
         <tr>
           <th>#</th>
-          <th>공고명</th>
-          <th>발주기관</th>
+          <th class="sortable" data-col="공고명">공고명</th>
+          <th class="sortable" data-col="발주기관">발주기관</th>
           <th>분야</th>
-          <th>예산(원)</th>
-          <th>마감일시</th>
-          <th>단계</th>
-          <th>판단상태</th>
+          <th class="sortable" data-col="예산금액">예산(원)</th>
+          <th class="sortable" data-col="마감일시">마감일시</th>
+          <th class="sortable" data-col="단계">단계</th>
+          <th class="sortable" data-col="판단상태">판단상태</th>
           <th>다운로드</th>
           <th>출처</th>
+          <th></th>
         </tr>
       </thead>
       <tbody id="table-body"></tbody>
@@ -587,7 +813,9 @@
         <div id="report-viewer-title"></div>
         <button id="report-close">&#x2715;</button>
       </div>
-      <div id="report-body"></div>
+      <div id="report-body-wrap">
+        <div id="report-body"></div>
+      </div>
     </div>
   </div>
 
@@ -655,14 +883,22 @@ if (window.location.protocol === "file:") {
 const API_ANNOUNCEMENTS = "/api/announcements";
 const API_DOWNLOAD      = (id) => `/api/download/${id}`;
 const API_STATUS        = (id) => `/api/status/${id}`;
+const API_DELETE        = (id) => `/api/announcement/${id}/delete`;
+const API_RESTORE       = (id) => `/api/announcement/${id}/restore`;
+const API_SET_STATUS    = (id) => `/api/announcement/${id}/status`;
 const POLL_INTERVAL_MS  = 2500;   // 폴링 간격
 const URGENT_DAYS       = 7;
 
 let allItems         = [];        // 전체 공고 목록 (서버에서 로드)
 let showAnalyzedOnly = false;
-let selectedField    = "";
+let showDeleted      = false;     // 삭제된 항목 표시 여부
+let selectedKeyword  = "";
 let selectedStatus   = "";
 let selectedStage    = "";
+
+// 컬럼 정렬 상태: null이면 기본(마감일 기준)
+let sortCol = null;   // 컬럼 키 문자열 또는 null
+let sortDir = "asc";  // "asc" | "desc"
 
 // stable_id → setInterval 핸들 (폴링 관리)
 const pollingMap = {};
@@ -828,74 +1064,160 @@ async function handleDownload(stableId, btn) {
 // ══════════════════════════════════════════════════════════════════════════
 // 필터 & 렌더
 // ══════════════════════════════════════════════════════════════════════════
-function getFiltered() {
-  return allItems
-    .filter(item => {
-      if (showAnalyzedOnly && !item.analyzed) return false;
-      if (selectedField  && item.field !== selectedField)             return false;
-      if (selectedStatus && item["판단상태"] !== selectedStatus)      return false;
-      if (selectedStage  && item["단계"] !== selectedStage)           return false;
-      return true;
-    })
-    .sort(deadlineSort);
+// 예산금액 문자열 → 숫자 파싱 (콤마·"원" 제거)
+function parseBudget(str) {
+  if (!str) return -1;
+  var n = parseFloat(String(str).replace(/[,원\s]/g, ""));
+  return isNaN(n) ? -1 : n;
 }
 
-function 판단상태Badge(st) {
-  if (st === "검토완료") return `<span class="badge badge-analyzed">검토완료</span>`;
-  if (st === "분석대기") return `<span class="badge badge-waiting">분석대기</span>`;
-  if (st === "미검토")   return `<span class="badge badge-pending">미검토</span>`;
-  return `<span class="badge badge-pending">${escHtml(st)}</span>`;
+function getFiltered() {
+  var filtered = allItems.filter(function(item) {
+    // 삭제 필터: showDeleted가 false면 삭제된 항목 숨김
+    if (!showDeleted && item["삭제됨"]) return false;
+    // showDeleted가 true면 삭제된 항목만 보임
+    if (showDeleted && !item["삭제됨"]) return false;
+    if (showAnalyzedOnly && !item.analyzed) return false;
+    if (selectedKeyword) {
+      var title = (item["공고명"] || "").toLowerCase();
+      if (!title.includes(selectedKeyword.toLowerCase())) return false;
+    }
+    if (selectedStatus && item["판단상태"] !== selectedStatus) return false;
+    if (selectedStage  && item["단계"] !== selectedStage)     return false;
+    return true;
+  });
+
+  if (!sortCol) {
+    // 기본: 마감일 오름차순
+    filtered.sort(deadlineSort);
+  } else {
+    filtered.sort(function(a, b) {
+      var va, vb;
+      if (sortCol === "예산금액") {
+        va = parseBudget(a[sortCol]);
+        vb = parseBudget(b[sortCol]);
+      } else if (sortCol === "마감일시") {
+        var da = parseDeadline(a[sortCol]);
+        var db = parseDeadline(b[sortCol]);
+        va = da ? da.getTime() : (sortDir === "asc" ? Infinity : -Infinity);
+        vb = db ? db.getTime() : (sortDir === "asc" ? Infinity : -Infinity);
+      } else {
+        va = (a[sortCol] || "").toString().toLowerCase();
+        vb = (b[sortCol] || "").toString().toLowerCase();
+      }
+      if (va < vb) return sortDir === "asc" ? -1 : 1;
+      if (va > vb) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }
+  return filtered;
+}
+
+// 판단상태 인라인 드롭다운 HTML 생성
+// 분석대기/검토완료 등 시스템 값은 배지로 유지하고,
+// 미검토/관심/참여검토/제외만 드롭다운으로 변경 가능하게 함
+function statusCellHtml(item) {
+  var st = item["판단상태"] || "미검토";
+  // 드롭다운 적용 대상: 미검토·관심·참여검토·제외
+  var editable = ["미검토", "관심", "참여검토", "제외"];
+  if (editable.indexOf(st) !== -1) {
+    var opts = editable.map(function(v) {
+      var sel = (v === st) ? " selected" : "";
+      return "<option value=\"" + v + "\"" + sel + ">" + v + "</option>";
+    }).join("");
+    var cls = "status-select st-" + st;
+    return "<select class=\"" + cls + "\" data-id=\"" + escHtml(item.stable_id) + "\">" + opts + "</select>";
+  }
+  // 기타 시스템 값(분석대기 등)은 배지로 표시
+  if (st === "분석대기") return "<span class=\"badge badge-waiting\">분석대기</span>";
+  if (st === "검토완료") return "<span class=\"badge badge-analyzed\">검토완료</span>";
+  return "<span class=\"badge badge-pending\">" + escHtml(st) + "</span>";
 }
 
 function renderTable() {
-  const filtered = getFiltered();
-  const tbody = document.getElementById("table-body");
+  var filtered = getFiltered();
+  var tbody = document.getElementById("table-body");
   tbody.innerHTML = "";
 
-  filtered.forEach((item, idx) => {
-    const tr = document.createElement("tr");
-    if (item.analyzed) tr.classList.add("analyzed-row");
+  filtered.forEach(function(item, idx) {
+    var tr = document.createElement("tr");
+    if (item.analyzed) { tr.classList.add("analyzed-row"); }
+    if (item["삭제됨"]) { tr.classList.add("deleted-row"); }
 
-    const deadline = item["마감일시"] || "";
-    const urgent   = isUrgent(deadline);
-    const dlDeadline = deadline
-      ? `<span class="${urgent ? "deadline-urgent" : ""}">${escHtml(deadline)}</span>`
+    var deadline = item["마감일시"] || "";
+    var urgent   = isUrgent(deadline);
+    var dlDeadline = deadline
+      ? "<span class=\"" + (urgent ? "deadline-urgent" : "") + "\">" + escHtml(deadline) + "</span>"
       : "-";
 
-    const linkHtml = item["공고링크"]
-      ? `<a href="${escHtml(item["공고링크"])}" target="_blank" rel="noopener">${escHtml(item["출처사이트"] || "링크")}</a>`
+    var linkHtml = item["공고링크"]
+      ? "<a href=\"" + escHtml(item["공고링크"]) + "\" target=\"_blank\" rel=\"noopener\">" + escHtml(item["출처사이트"] || "링크") + "</a>"
       : escHtml(item["출처사이트"] || "-");
 
-    const { label, cls, disabled } = downloadBtnLabel(item);
-    const disabledAttr = disabled ? " disabled" : "";
-    const dlBtn = `<button class="dl-btn ${cls}" id="dl-btn-${escHtml(item.stable_id)}"${disabledAttr}>${label}</button>`;
+    var dlInfo = downloadBtnLabel(item);
+    var disabledAttr = dlInfo.disabled ? " disabled" : "";
+    var dlBtn = "<button class=\"dl-btn " + dlInfo.cls + "\" id=\"dl-btn-" + escHtml(item.stable_id) + "\"" + disabledAttr + ">" + dlInfo.label + "</button>";
 
-    tr.innerHTML = `
-      <td>${idx + 1}</td>
-      <td class="title-cell">${escHtml(item["공고명"])}</td>
-      <td>${escHtml(item["발주기관"])}</td>
-      <td>${escHtml(item.field || "-")}</td>
-      <td>${escHtml(item["예산금액"] || "-")}</td>
-      <td>${dlDeadline}</td>
-      <td>${escHtml(item["단계"] || "-")}</td>
-      <td>${판단상태Badge(item["판단상태"])}</td>
-      <td>${dlBtn}</td>
-      <td>${linkHtml}</td>
-    `;
+    // 오른쪽 끝 버튼: 삭제됨이면 복원, 아니면 삭제
+    var actionBtn = item["삭제됨"]
+      ? "<button class=\"restore-btn\" data-id=\"" + escHtml(item.stable_id) + "\">복원</button>"
+      : "<button class=\"del-btn\" data-id=\"" + escHtml(item.stable_id) + "\" title=\"삭제\">&#x1F5D1;</button>";
+
+    tr.innerHTML =
+      "<td>" + (idx + 1) + "</td>" +
+      "<td class=\"title-cell\">" + escHtml(item["공고명"]) + "</td>" +
+      "<td>" + escHtml(item["발주기관"]) + "</td>" +
+      "<td>" + escHtml(item.field || "-") + "</td>" +
+      "<td>" + escHtml(item["예산금액"] || "-") + "</td>" +
+      "<td>" + dlDeadline + "</td>" +
+      "<td>" + escHtml(item["단계"] || "-") + "</td>" +
+      "<td>" + statusCellHtml(item) + "</td>" +
+      "<td>" + dlBtn + "</td>" +
+      "<td>" + linkHtml + "</td>" +
+      "<td>" + actionBtn + "</td>";
 
     // 다운로드 버튼 이벤트
-    const btn = tr.querySelector(".dl-btn");
-    if (btn && !disabled) {
-      btn.addEventListener("click", (e) => {
+    var btn = tr.querySelector(".dl-btn");
+    if (btn && !dlInfo.disabled) {
+      btn.addEventListener("click", function(e) {
         e.stopPropagation();
         handleDownload(item.stable_id, btn);
       });
     }
 
+    // 판단상태 드롭다운 변경 이벤트
+    var sel = tr.querySelector(".status-select");
+    if (sel) {
+      sel.addEventListener("change", function(e) {
+        e.stopPropagation();
+        handleStatusChange(item, sel);
+      });
+    }
+
+    // 삭제 버튼 이벤트
+    var delBtn = tr.querySelector(".del-btn");
+    if (delBtn) {
+      delBtn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        handleDelete(item);
+      });
+    }
+
+    // 복원 버튼 이벤트
+    var restoreBtn = tr.querySelector(".restore-btn");
+    if (restoreBtn) {
+      restoreBtn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        handleRestore(item);
+      });
+    }
+
     // 분석완료 행 클릭 → 상세
-    if (item.analyzed) {
-      tr.addEventListener("click", (e) => {
-        if (e.target.tagName === "A" || e.target.classList.contains("dl-btn")) return;
+    if (item.analyzed && !item["삭제됨"]) {
+      tr.addEventListener("click", function(e) {
+        if (e.target.tagName === "A" || e.target.classList.contains("dl-btn") ||
+            e.target.tagName === "SELECT" || e.target.classList.contains("del-btn") ||
+            e.target.classList.contains("restore-btn")) { return; }
         showDetail(item);
       });
     }
@@ -908,27 +1230,35 @@ function renderTable() {
     }
   });
 
-  const analyzedCnt  = filtered.filter(i => i.analyzed).length;
-  const readyCnt     = filtered.filter(i => i["판단상태"] === "분석대기").length;
-  const bidCnt       = filtered.filter(i => i["단계"] === "입찰공고").length;
-  const preCnt       = filtered.filter(i => i["단계"] === "사전규격").length;
+  // 정렬 헤더 표시 갱신
+  document.querySelectorAll("th.sortable").forEach(function(th) {
+    th.classList.remove("sort-asc", "sort-desc");
+    if (th.dataset.col === sortCol) {
+      th.classList.add(sortDir === "asc" ? "sort-asc" : "sort-desc");
+    }
+  });
+
+  var activeItems = allItems.filter(function(i) { return !i["삭제됨"]; });
+  var analyzedCnt = filtered.filter(function(i) { return i.analyzed; }).length;
+  var readyCnt    = filtered.filter(function(i) { return i["판단상태"] === "분석대기"; }).length;
+  var bidCnt      = filtered.filter(function(i) { return i["단계"] === "입찰공고"; }).length;
+  var preCnt      = filtered.filter(function(i) { return i["단계"] === "사전규격"; }).length;
+  var deletedCnt  = allItems.filter(function(i) { return i["삭제됨"]; }).length;
   document.getElementById("stats").textContent =
-    `표시: ${filtered.length}건 (입찰공고 ${bidCnt} / 사전규격 ${preCnt}) | 분석완료: ${analyzedCnt}건 | 분석대기: ${readyCnt}건 | 전체: ${allItems.length}건`;
+    "표시: " + filtered.length + "건 (입찰공고 " + bidCnt + " / 사전규격 " + preCnt + ") | 분석완료: " + analyzedCnt + "건 | 분석대기: " + readyCnt + "건 | 전체: " + activeItems.length + "건 (삭제됨: " + deletedCnt + "건)";
 
   hideDetail();
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// 분야 드롭다운
+// 검색어 드롭다운 (config.yaml의 search_keywords를 API에서 동적으로 로드)
 // ══════════════════════════════════════════════════════════════════════════
-function buildFieldFilter() {
-  const fields = [...new Set(allItems.map(i => i.field).filter(Boolean))].sort();
-  const sel = document.getElementById("field-filter");
-  // 기존 옵션(전체) 이후 추가
+function buildKeywordFilter(keywords) {
+  const sel = document.getElementById("keyword-filter");
   sel.querySelectorAll("option:not([value=''])").forEach(o => o.remove());
-  fields.forEach(f => {
+  (keywords || []).forEach(kw => {
     const opt = document.createElement("option");
-    opt.value = f; opt.textContent = f;
+    opt.value = kw; opt.textContent = kw;
     sel.appendChild(opt);
   });
 }
@@ -968,7 +1298,7 @@ async function loadData() {
     document.getElementById("generated-at").textContent =
       allItems.length ? `${allItems.length}건 로드` : "";
 
-    buildFieldFilter();
+    buildKeywordFilter(data.keywords);
     document.getElementById("loading").style.display    = "none";
     document.getElementById("main-table").style.display = "table";
     renderTable();
@@ -981,6 +1311,57 @@ async function loadData() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// 소프트 삭제 핸들러
+// ══════════════════════════════════════════════════════════════════════════
+async function handleDelete(item) {
+  if (!confirm("\"" + item["공고명"] + "\"\n이 공고를 목록에서 숨기겠습니까?\n삭제된 항목 보기로 언제든 복원할 수 있습니다.")) { return; }
+  try {
+    var resp = await fetch(API_DELETE(item.stable_id), { method: "POST" });
+    if (!resp.ok) { throw new Error("HTTP " + resp.status); }
+    item["삭제됨"] = true;
+    renderTable();
+  } catch (e) {
+    alert("삭제 실패: " + e.message);
+  }
+}
+
+async function handleRestore(item) {
+  try {
+    var resp = await fetch(API_RESTORE(item.stable_id), { method: "POST" });
+    if (!resp.ok) { throw new Error("HTTP " + resp.status); }
+    item["삭제됨"] = false;
+    renderTable();
+  } catch (e) {
+    alert("복원 실패: " + e.message);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 판단상태 인라인 변경 핸들러
+// ══════════════════════════════════════════════════════════════════════════
+async function handleStatusChange(item, selEl) {
+  var newStatus = selEl.value;
+  var prevStatus = item["판단상태"];
+  // 낙관적 UI 갱신: 색상 클래스 즉시 교체
+  selEl.className = "status-select st-" + newStatus;
+  item["판단상태"] = newStatus;
+  try {
+    var resp = await fetch(API_SET_STATUS(item.stable_id), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ "판단상태": newStatus })
+    });
+    if (!resp.ok) { throw new Error("HTTP " + resp.status); }
+  } catch (e) {
+    // 실패 시 원래 값 복원
+    item["판단상태"] = prevStatus;
+    selEl.value = prevStatus;
+    selEl.className = "status-select st-" + prevStatus;
+    alert("상태 변경 실패: " + e.message);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // 이벤트 바인딩
 // ══════════════════════════════════════════════════════════════════════════
 document.getElementById("toggle-analyzed").addEventListener("click", function() {
@@ -989,8 +1370,29 @@ document.getElementById("toggle-analyzed").addEventListener("click", function() 
   renderTable();
 });
 
-document.getElementById("field-filter").addEventListener("change", function() {
-  selectedField = this.value;
+document.getElementById("toggle-deleted").addEventListener("click", function() {
+  showDeleted = !showDeleted;
+  this.classList.toggle("active", showDeleted);
+  this.textContent = showDeleted ? "일반 목록 보기" : "삭제된 항목 보기";
+  renderTable();
+});
+
+// 컬럼 헤더 클릭 → 정렬 전환
+document.querySelectorAll("th.sortable").forEach(function(th) {
+  th.addEventListener("click", function() {
+    var col = th.dataset.col;
+    if (sortCol === col) {
+      sortDir = (sortDir === "asc") ? "desc" : "asc";
+    } else {
+      sortCol = col;
+      sortDir = "asc";
+    }
+    renderTable();
+  });
+});
+
+document.getElementById("keyword-filter").addEventListener("change", function() {
+  selectedKeyword = this.value;
   renderTable();
 });
 
@@ -1103,12 +1505,45 @@ async function openReport(stableId, title) {
 
   try {
     const resp = await fetch(API_REPORT(stableId));
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
     const data = await resp.json();
-    document.getElementById("report-body").innerHTML = data.html || "<p>(내용 없음)</p>";
+    var body = document.getElementById("report-body");
+    body.innerHTML = data.html || "<p>(내용 없음)</p>";
+    wrapExecBox(body);
   } catch (e) {
     document.getElementById("report-body").innerHTML =
-      `<p style='color:#dc2626'>리포트 로드 실패: ${escHtml(e.message)}</p>`;
+      "<p style='color:#dc2626'>리포트 로드 실패: " + escHtml(e.message) + "</p>";
+  }
+}
+
+// Executive Summary h2 바로 뒤 단락들을 exec-box div로 감싼다.
+// h2 텍스트에 "Executive Summary"가 포함된 첫 번째 h2를 찾아 처리.
+function wrapExecBox(bodyEl) {
+  var h2s = bodyEl.querySelectorAll("h2");
+  var execH2 = null;
+  for (var i = 0; i < h2s.length; i++) {
+    if (h2s[i].textContent.indexOf("Executive Summary") !== -1) {
+      execH2 = h2s[i];
+      break;
+    }
+  }
+  if (!execH2) return;
+  execH2.classList.add("exec-heading");
+
+  // 뒤따르는 형제 노드 중 p 태그를 연속해서 수집 (다음 h2 전까지)
+  var paras = [];
+  var node = execH2.nextElementSibling;
+  while (node && node.tagName !== "H2") {
+    if (node.tagName === "P") { paras.push(node); }
+    node = node.nextElementSibling;
+  }
+  if (paras.length === 0) return;
+
+  var box = document.createElement("div");
+  box.className = "exec-box";
+  execH2.parentNode.insertBefore(box, paras[0]);
+  for (var j = 0; j < paras.length; j++) {
+    box.appendChild(paras[j]);
   }
 }
 

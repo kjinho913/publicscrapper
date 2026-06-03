@@ -28,7 +28,8 @@ json_store.py — JSON 단일 원본 저장소.
     변환경로목록,         ← HWP→PDF 변환 후 로컬 경로 목록 (3단계에서 채움)
     다운로드상태,         ← "none" | "downloading" | "ready" | "failed"
     최초수집일시, 최종수집일시,
-    analyzed, 분석경로, 판단상태
+    analyzed, 분석경로, 판단상태,
+    삭제됨               ← bool, 기본 false. 소프트 삭제 플래그 (재수집 시 유지)
 """
 
 import json
@@ -37,6 +38,10 @@ from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# scraper 패키지 루트 (= D:\...\webscrap\scraper)
+# json_store.py 위치: scraper/core/json_store.py → .parent.parent = scraper/
+_SCRAPER_ROOT = Path(__file__).resolve().parent.parent
 
 # 갱신 시 덮어쓰는 필드 (수집 때마다 변할 수 있는 값)
 _MUTABLE_FIELDS = {
@@ -60,12 +65,16 @@ _IMMUTABLE_FIELDS = {
     "첨부파일경로",
     "변환경로목록",  # 3단계에서 채운 변환 결과 보존
     "다운로드상태",  # 버튼 클릭 후 전이된 상태 보존
+    "삭제됨",       # 사람이 누른 소프트 삭제 플래그 — 재수집 시에도 유지
 }
 
 
 def _store_path(config: dict) -> Path:
     out_cfg = config.get("output", {})
     out_dir = Path(out_cfg.get("directory", "./output"))
+    # 상대경로면 scraper 패키지 루트 기준으로 resolve — cwd에 무관하게 항상 같은 위치
+    if not out_dir.is_absolute():
+        out_dir = _SCRAPER_ROOT / out_dir
     return out_dir / "announcements.json"
 
 
@@ -100,6 +109,7 @@ def _make_record(ann: dict, now_str: str) -> dict:
         "analyzed":      False,
         "분석경로":      "",
         "판단상태":      "미검토",
+        "삭제됨":        False,
     }
 
 
@@ -189,6 +199,7 @@ def upsert(records: list[dict], config: dict) -> dict:
             existing.setdefault("첨부URL목록", [])
             existing.setdefault("변환경로목록", [])
             existing.setdefault("다운로드상태", "none")
+            existing.setdefault("삭제됨", False)
             update_count += 1
 
     store["generated_at"] = now_str

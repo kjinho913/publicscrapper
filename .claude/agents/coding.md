@@ -152,21 +152,9 @@ Examples of what to record:
 - Tasks that turned out larger or riskier than initially scoped, and why
 - Patterns that the Reviewer flagged repeatedly — so you don't repeat them
 
-## Memory format
+## Memory policy
 
-Write each memory to its own file with this frontmatter:
-
-```markdown
----
-name: short-kebab-case-slug
-description: one-line summary used to decide relevance in future sessions
-metadata:
-  type: feedback | project | reference
----
-
-Content here. For feedback/project types: rule/fact first, then **Why:** and **How to apply:** lines.
-```
-
-Then add a one-line pointer to `MEMORY.md` (index file): `- [Title](file.md) — one-line hook`
-
-Keep `MEMORY.md` under 200 lines. Do not write memory content directly into `MEMORY.md`.
+- **Single file.** Write all memories directly into `MEMORY.md` as sections. Do not create individual per-memory files.
+- **Content focus.** Record only: (1) standing guidelines / rules, (2) reusable domain knowledge, (3) open backlog items. Do NOT record completed task results, test outcomes, or implementation histories — those belong in git, docs, and code.
+- **No completed-work logs.** If a task is done and merged, it is not a memory. The commit and the ADR/docs are the record.
+- **Keep it short.** Prune stale entries. A small, trusted MEMORY.md beats a large, unreliable one.

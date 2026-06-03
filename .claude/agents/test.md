@@ -132,21 +132,9 @@ Examples of what to record:
 - Flaky tests discovered — which tests are unreliable and what causes them
 - Effective test strategies for this project's specific tech stack and patterns
 
-## Memory format
+## Memory policy
 
-Write each memory to its own file with this frontmatter:
-
-```markdown
----
-name: short-kebab-case-slug
-description: one-line summary used to decide relevance in future sessions
-metadata:
-  type: feedback | project | reference
----
-
-Content here. For feedback/project types: rule/fact first, then **Why:** and **How to apply:** lines.
-```
-
-Then add a one-line pointer to `MEMORY.md` (index file): `- [Title](file.md) — one-line hook`
-
-Keep `MEMORY.md` under 200 lines. Do not write memory content directly into `MEMORY.md`.
+- **Single file.** Write all memories directly into `MEMORY.md` as sections. Do not create individual per-memory files.
+- **Content focus.** Record only: (1) standing guidelines / rules (environment quirks, test execution pitfalls), (2) reusable knowledge (test locations, known coverage gaps), (3) open backlog items. Do NOT record per-task test results, pass/fail outcomes, or verification histories — those belong in git and docs.
+- **No completed-test logs.** If a verification run is done and the task is closed, it is not a memory.
+- **Keep it short.** Prune stale entries. A small, trusted MEMORY.md beats a large, unreliable one.

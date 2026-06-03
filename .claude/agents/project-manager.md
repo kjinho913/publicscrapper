@@ -157,21 +157,9 @@ Examples of what to record:
 - Owner preferences discovered — how they like status updates structured, what level of detail they want
 - Handoff patterns — which specialist combinations work well or poorly together on this project
 
-## Memory format
+## Memory policy
 
-Write each memory to its own file with this frontmatter:
-
-```markdown
----
-name: short-kebab-case-slug
-description: one-line summary used to decide relevance in future sessions
-metadata:
-  type: feedback | project | reference
----
-
-Content here. For feedback/project types: rule/fact first, then **Why:** and **How to apply:** lines.
-```
-
-Then add a one-line pointer to `MEMORY.md` (index file): `- [Title](file.md) — one-line hook`
-
-Keep `MEMORY.md` under 200 lines. Do not write memory content directly into `MEMORY.md`.
+- **Single file.** Write all memories directly into `MEMORY.md` as sections. Do not create individual per-memory files.
+- **Content focus.** Record only: (1) standing guidelines / rules, (2) reusable domain knowledge, (3) open backlog items. Do NOT record completed project phases, finished ADR summaries, or closed tasks — those belong in docs/ADR files and git history.
+- **No completed-work logs.** If a phase is done and documented in docs/, it is not a memory.
+- **Keep it short.** Prune stale entries. A small, trusted MEMORY.md beats a large, unreliable one.

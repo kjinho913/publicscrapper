@@ -156,9 +156,26 @@ def main() -> None:
                              help="상세 페이지 HTML 출력 (예: --debug-detail nipa <url>)")
 
     parser.add_argument("--config", default=str(_DEFAULT_CONFIG), help="설정 파일 경로")
+    parser.add_argument(
+        "--add-keywords",
+        default="",
+        metavar="KEYWORDS",
+        help="기본 검색어에 추가할 키워드 (쉼표 구분, 인메모리 병합 — config.yaml 변경 없음)",
+    )
     args = parser.parse_args()
 
     config = load_config(Path(args.config))
+
+    # --add-keywords: 쉼표로 분리 → trim → 중복 제거 → g2b search_keywords에 인메모리 append
+    if args.add_keywords.strip():
+        extra = [kw.strip() for kw in args.add_keywords.split(",") if kw.strip()]
+        g2b_cfg = config.setdefault("sites", {}).setdefault("g2b", {})
+        existing = g2b_cfg.setdefault("search_keywords", [])
+        for kw in extra:
+            if kw not in existing:
+                existing.append(kw)
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
+        logging.getLogger("main").info("[G2B] 검색어(기본+추가): %s", existing)
 
     # 디버그 모드 (로깅 설정 불필요)
     if args.debug_detail:

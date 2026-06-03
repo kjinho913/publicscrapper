@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{보고서_타이틀}}</title>
+<style>
+  :root {
+    --navy:#1a2e4a; --blue:#1e5fa8; --light-blue:#e8f0fb; --accent:#2575d0;
+    --red:#c0392b; --yellow:#d4a017; --green:#1a7a4a;
+    --bg:#f5f7fa; --card:#ffffff; --border:#dde3ec; --text:#1e2733; --muted:#5a6475;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;
+       background:var(--bg);color:var(--text);font-size:13.5px;line-height:1.75;}
+
+  /* HEADER */
+  .report-header{background:linear-gradient(135deg,var(--navy) 0%,#243b6e 60%,var(--blue) 100%);
+    color:#fff;padding:42px 48px 36px;}
+  .report-header .tag{display:inline-block;background:rgba(255,255,255,.18);
+    border:1px solid rgba(255,255,255,.35);border-radius:20px;font-size:11px;
+    padding:3px 12px;letter-spacing:.5px;margin-bottom:14px;}
+  .report-header h1{font-size:22px;font-weight:800;line-height:1.4;margin-bottom:6px;}
+  .report-header .sub{font-size:13px;opacity:.75;margin-bottom:22px;}
+  .meta-grid{display:flex;gap:28px;flex-wrap:wrap;}
+  .meta-item{font-size:12px;opacity:.88;}
+  .meta-item strong{display:block;font-size:10px;opacity:.65;margin-bottom:2px;
+    letter-spacing:.5px;text-transform:uppercase;}
+
+  /* NAV */
+  .nav-bar{background:var(--navy);padding:0 48px;display:flex;gap:4px;
+    overflow-x:auto;border-bottom:2px solid var(--blue);}
+  .nav-bar a{color:rgba(255,255,255,.7);text-decoration:none;font-size:12px;
+    padding:10px 13px;white-space:nowrap;border-bottom:2px solid transparent;
+    margin-bottom:-2px;transition:.2s;}
+  .nav-bar a:hover{color:#fff;border-bottom-color:var(--accent);}
+
+  /* MAIN */
+  .main{max-width:1120px;margin:0 auto;padding:32px 24px 60px;}
+
+  /* EXEC */
+  .exec-box{background:linear-gradient(135deg,#1e3c72 0%,#2a5298 100%);color:#fff;
+    border-radius:12px;padding:28px 32px;margin-bottom:32px;
+    box-shadow:0 4px 18px rgba(30,63,114,.18);}
+  .exec-box h2{font-size:15px;font-weight:700;margin-bottom:16px;}
+  .exec-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+  .exec-card{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+    border-radius:8px;padding:14px 16px;}
+  .exec-card .label{font-size:10px;opacity:.7;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+  .exec-card .val{font-size:14px;font-weight:700;}
+  .exec-points{list-style:none;}
+  .exec-points li{padding:9px 14px 9px 28px;position:relative;font-size:13px;
+    border-bottom:1px solid rgba(255,255,255,.1);}
+  .exec-points li:last-child{border-bottom:none;}
+  .exec-points li::before{content:attr(data-icon);position:absolute;left:4px;}
+
+  /* SECTION */
+  .section{margin-bottom:36px;}
+  .section-head{display:flex;align-items:center;gap:10px;margin-bottom:18px;
+    padding-bottom:10px;border-bottom:2px solid var(--blue);}
+  .section-num{background:var(--blue);color:#fff;border-radius:6px;font-size:12px;
+    font-weight:800;padding:4px 10px;min-width:36px;text-align:center;}
+  .section-head h2{font-size:16px;font-weight:700;color:var(--navy);}
+
+  /* PAGE REF */
+  .pref{display:inline-block;background:#edf2fb;color:var(--blue);border-radius:4px;
+    font-size:10.5px;padding:1px 6px;margin-left:4px;font-weight:600;white-space:nowrap;}
+
+  footer{background:var(--navy);color:rgba(255,255,255,.6);text-align:center;
+    padding:18px;font-size:11px;}
+
+  @media(max-width:750px){
+    .exec-row{grid-template-columns:1fr;}
+    .report-header{padding:24px 18px;}
+    .main{padding:20px 12px;}
+    .nav-bar{padding:0 12px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="report-header">
+  <div class="tag">📋 {{보고서_태그}}</div>
+  <h1>{{사업명}}<br>{{보고서_부제}}</h1>
+  <div class="sub">{{버전_정보}} | {{분석_기준}}</div>
+  <div class="meta-grid">
+    <div class="meta-item"><strong>전담기관</strong>{{전담기관}}</div>
+    <div class="meta-item"><strong>주무부처</strong>{{주무부처}}</div>
+    <div class="meta-item"><strong>총 사업비</strong>{{총사업비}}</div>
+    <div class="meta-item"><strong>사업 기간</strong>{{사업기간}}</div>
+    <div class="meta-item"><strong>평가 비율</strong>{{평가비율}}</div>
+    <div class="meta-item"><strong>제안요청설명회</strong>{{설명회_일정}}</div>
+  </div>
+</div>
+
+<nav class="nav-bar">
+  <a href="#exec">Executive Summary</a>
+  <a href="#s1">1. 기초정보</a>
+  <a href="#s2">2. 핵심 요구사항</a>
+  <a href="#s3">3. 필요 리소스</a>
+  <a href="#s4">4. 위험 요소</a>
+  <a href="#s5">5. 평가기준·배점</a>
+  <a href="#s6">6. 제안서 작성</a>
+  <a href="#s7">7. 일반 규정</a>
+  <a href="#s8">8. Q&amp;A 전략</a>
+  <a href="#s9">9. 수주 전략</a>
+</nav>
+
+<div class="main">
+
+  <div class="exec-box" id="exec">
+    <h2>⚡ Executive Summary — {{요약_부제}}</h2>
+    <div class="exec-row">
+      <div class="exec-card">
+        <div class="label">{{지표1_라벨}}</div>
+        <div class="val">{{지표1_값}} <span style="font-size:10px;opacity:.7">{{지표1_출처}}</span></div>
+      </div>
+      <div class="exec-card">
+        <div class="label">{{지표2_라벨}}</div>
+        <div class="val">{{지표2_값}} <span style="font-size:10px;opacity:.7">{{지표2_출처}}</span></div>
+      </div>
+      <div class="exec-card">
+        <div class="label">{{지표3_라벨}}</div>
+        <div class="val">{{지표3_값}} <span style="font-size:10px;opacity:.7">{{지표3_출처}}</span></div>
+      </div>
+      <div class="exec-card">
+        <div class="label">{{지표4_라벨}}</div>
+        <div class="val">{{지표4_값}} <span style="font-size:10px;opacity:.7">{{지표4_출처}}</span></div>
+      </div>
+    </div>
+    <ul class="exec-points">
+      <li data-icon="🎯">{{핵심포인트1_본문}} <span class="pref">{{핵심포인트1_출처}}</span></li>
+      <li data-icon="🎯">{{핵심포인트2_본문}} <span class="pref">{{핵심포인트2_출처}}</span></li>
+      <li data-icon="🚨">{{핵심포인트3_본문}} <span class="pref">{{핵심포인트3_출처}}</span></li>
+      <li data-icon="⚠️">{{핵심포인트4_본문}} <span class="pref">{{핵심포인트4_출처}}</span></li>
+    </ul>
+  </div>
+
+  <div class="section" id="s1">
+    <div class="section-head">
+      <span class="section-num">1</span>
+      <h2>사업의 기초 정보 (Context &amp; Budget)</h2>
+    </div>
+    <!-- Section 1 content here -->
+  </div>
+
+  <div class="section" id="s2">
+    <div class="section-head">
+      <span class="section-num">2</span>
+      <h2>핵심 요구사항 분류 (Keypoints)</h2>
+    </div>
+    <!-- Section 2 content here -->
+  </div>
+
+  <div class="section" id="s3">
+    <div class="section-head">
+      <span class="section-num">3</span>
+      <h2>사업 필요 리소스 정의 (Required Resources)</h2>
+    </div>
+    <!-- Section 3 content here -->
+  </div>
+
+  <div class="section" id="s4">
+    <div class="section-head">
+      <span class="section-num">4</span>
+      <h2>위험 요소 분석 (Risk Points)</h2>
+    </div>
+    <!-- Section 4 content here -->
+  </div>
+
+  <div class="section" id="s5">
+    <div class="section-head">
+      <span class="section-num">5</span>
+      <h2>평가 기준 및 배점 분석 (Evaluation Criteria)</h2>
+    </div>
+    <!-- Section 5 content here -->
+  </div>
+
+  <div class="section" id="s6">
+    <div class="section-head">
+      <span class="section-num">6</span>
+      <h2>제안서 작성 요령 및 규칙 (Writing Guidelines)</h2>
+    </div>
+    <!-- Section 6 content here -->
+  </div>
+
+  <div class="section" id="s7">
+    <div class="section-head">
+      <span class="section-num">7</span>
+      <h2>일반 규정 및 금지 사항 (General Rules)</h2>
+    </div>
+    <!-- Section 7 content here -->
+  </div>
+
+  <div class="section" id="s8">
+    <div class="section-head">
+      <span class="section-num">8</span>
+      <h2>발주처 질의 전략 (Q&amp;A Strategy)</h2>
+    </div>
+    <!-- Section 8 content here -->
+  </div>
+
+  <div class="section" id="s9">
+    <div class="section-head">
+      <span class="section-num">9</span>
+      <h2>수주 전략 제언 (Win Strategy)</h2>
+    </div>
+    <!-- Section 9 content here -->
+  </div>
+
+</div><!-- /main -->
+
+<footer>
+  📋 {{푸터_문구}}
+</footer>
+</body>
+</html>

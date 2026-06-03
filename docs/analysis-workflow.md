@@ -55,19 +55,19 @@ scripts/run_dashboard.bat 더블클릭
 2. 아래 형식으로 분석 요청:
 
 ```
-rfp-analyzer 에이전트를 사용해서 아래 PDF를 분석하고
-결과를 analysis/{stable_id}/result.md 로 저장해 주세요.
+rfp-analyzer 에이전트를 사용해서 아래 PDF를 분석해 주세요.
 
 PDF 경로:
 C:\...\파일명.pdf
-
-stable_id: 나라장터-R26BKXXXXXXX
 ```
 
 3. rfp-analyzer가 9개 섹션 분석 리포트를 생성하고
-   analysis/{stable_id}/result.md 경로에 저장합니다
+   **자동으로** `analysis/{stable_id}/result.md` 경로에 저장합니다
+   - stable_id는 PDF 경로(`scraper/output/나라장터/{stable_id}/`)에서 자동 추출
+   - 저장 완료 후 에이전트가 저장 경로를 응답에 명시
 
-> stable_id는 탭2 카드에서 "ID:" 항목으로 확인할 수 있습니다.
+> **사용자가 별도로 stable_id를 지정하거나 저장 경로를 안내할 필요 없습니다.**
+> PDF 경로만 주면 저장까지 자동으로 완료됩니다.
 
 ---
 

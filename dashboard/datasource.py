@@ -18,6 +18,8 @@ import re
 import sys
 from pathlib import Path
 
+import yaml  # pip install pyyaml
+
 logger = logging.getLogger(__name__)
 
 # ── 경로 상수 ────────────────────────────────────────────────────────────────
@@ -37,6 +39,9 @@ _STORE_PATH = _PROJECT_ROOT / "scraper" / "output" / "announcements.json"
 
 # 분석 결과 위치: analysis/{stable_id}/result.md (프로젝트 루트 기준)
 _ANALYSIS_DIR = _PROJECT_ROOT / "analysis"
+
+# scraper config 위치: scraper/config.yaml
+_CONFIG_PATH = _PROJECT_ROOT / "scraper" / "config.yaml"
 
 
 # ── 분석 결과 파싱 ───────────────────────────────────────────────────────────
@@ -92,6 +97,26 @@ def read_analysis(stable_id: str) -> dict:
 
 # ── 공개 함수 ────────────────────────────────────────────────────────────────
 
+def load_search_keywords() -> list[str]:
+    """
+    scraper/config.yaml의 sites.g2b.search_keywords 목록을 반환한다.
+
+    config가 없거나 키워드가 비어있으면 빈 리스트를 반환한다(에러 없이).
+    """
+    if not _CONFIG_PATH.exists():
+        logger.warning("config.yaml 없음: %s", _CONFIG_PATH)
+        return []
+
+    try:
+        with _CONFIG_PATH.open(encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        keywords = cfg.get("sites", {}).get("g2b", {}).get("search_keywords", [])
+        return [str(k) for k in keywords] if keywords else []
+    except Exception as e:
+        logger.warning("config.yaml 읽기 실패: %s", e)
+        return []
+
+
 def load_announcements() -> list[dict]:
     """
     announcements.json을 읽고 분석 결과를 serve-time에 병합해
@@ -137,6 +162,7 @@ def load_announcements() -> list[dict]:
             "출처사이트":    rec.get("출처사이트", ""),
             "첨부파일경로":  rec.get("첨부파일경로", ""),
             "변환경로목록":  rec.get("변환경로목록", []),
+            "삭제됨":        rec.get("삭제됨", False),
         })
 
     return items
