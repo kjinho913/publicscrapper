@@ -1,13 +1,15 @@
 """
 dashboard/datasource.py — 화면용 공고 목록 생성 모듈 (도메인: backend)
 
-announcements.json(정본)을 읽고 analysis/{stable_id}/result.md 존재를
-serve-time에 파생해 화면용 항목 목록을 만든다.
+announcements.json(정본)을 읽고 analysis/{stable_id}/result.html(또는
+result.md) 존재를 serve-time에 파생해 화면용 항목 목록을 만든다.
 
 generate.py의 read_analysis / extract_executive_summary / extract_field
 로직을 흡수. derive_stable_id는 scraper.core.ids 재사용(중복 정의 금지).
 
-분석완료 판정: result.md 파일이 존재하면 analyzed=True.
+분석완료 판정 기준 (우선순위 순):
+  1. result.html 이 존재하면 analyzed=True (신형 HTML 리포트)
+  2. result.md  가 존재하면 analyzed=True (구형 마크다운 리포트, 하위호환)
 저장소의 analyzed 플래그에는 의존하지 않는다.
 """
 
@@ -70,29 +72,57 @@ def extract_field(md_text: str) -> str:
 
 def read_analysis(stable_id: str) -> dict:
     """
-    analysis/{stable_id}/result.md를 읽어 analyzed, summary, field를 반환한다.
+    analysis/{stable_id}/ 아래의 리포트 파일을 읽어 analyzed, summary, field를 반환한다.
+
+    탐색 우선순위:
+      1. result.html — 신형 완성형 HTML 리포트 (ArtifactRendering 출력)
+         summary/field 추출을 위해 마크다운 파싱 대신 텍스트 검색을 사용한다.
+      2. result.md   — 구형 마크다운 리포트 (하위호환, 기존 파일 보호)
 
     Returns:
         {
             "analyzed": bool,
+            "report_format": "html" | "md" | "",  # 발견된 파일 형식
             "summary": str,
             "field": str,
         }
     """
-    result_path = _ANALYSIS_DIR / stable_id / "result.md"
-    if not result_path.exists():
-        return {"analyzed": False, "summary": "", "field": ""}
+    html_path = _ANALYSIS_DIR / stable_id / "result.html"
+    md_path   = _ANALYSIS_DIR / stable_id / "result.md"
 
-    try:
-        md_text = result_path.read_text(encoding="utf-8")
-        return {
-            "analyzed": True,
-            "summary": extract_executive_summary(md_text),
-            "field": extract_field(md_text),
-        }
-    except Exception as e:
-        logger.warning("result.md 읽기 실패 (%s): %s", stable_id, e)
-        return {"analyzed": False, "summary": "", "field": ""}
+    # ── 신형 HTML 리포트 ─────────────────────────────────────────────────
+    if html_path.exists():
+        try:
+            html_text = html_path.read_text(encoding="utf-8")
+            # HTML에서 Executive Summary / 사업 분야 텍스트 추출
+            # HTML 태그를 제거하고 마크다운 파서를 재사용한다.
+            import re as _re
+            plain = _re.sub(r"<[^>]+>", " ", html_text)
+            return {
+                "analyzed":      True,
+                "report_format": "html",
+                "summary":       extract_executive_summary(plain),
+                "field":         extract_field(plain),
+            }
+        except Exception as e:
+            logger.warning("result.html 읽기 실패 (%s): %s", stable_id, e)
+            return {"analyzed": False, "report_format": "", "summary": "", "field": ""}
+
+    # ── 구형 마크다운 리포트 (하위호환) ──────────────────────────────────
+    if md_path.exists():
+        try:
+            md_text = md_path.read_text(encoding="utf-8")
+            return {
+                "analyzed":      True,
+                "report_format": "md",
+                "summary":       extract_executive_summary(md_text),
+                "field":         extract_field(md_text),
+            }
+        except Exception as e:
+            logger.warning("result.md 읽기 실패 (%s): %s", stable_id, e)
+            return {"analyzed": False, "report_format": "", "summary": "", "field": ""}
+
+    return {"analyzed": False, "report_format": "", "summary": "", "field": ""}
 
 
 # ── 공개 함수 ────────────────────────────────────────────────────────────────
@@ -117,33 +147,45 @@ def load_search_keywords() -> list[str]:
         return []
 
 
-def load_announcements() -> list[dict]:
+def load_announcements() -> tuple[list[dict], str]:
     """
     announcements.json을 읽고 분석 결과를 serve-time에 병합해
-    화면용 공고 목록을 반환한다.
+    화면용 공고 목록과 저장소 generated_at을 반환한다.
+
+    is_new_batch 판정: record["최초수집일시"] == store["generated_at"]
+    — 동일 스크랩 실행에서 삽입된 신규 레코드는 모두 같은 최초수집일시를 가지며,
+      그 값이 해당 실행의 generated_at과 동일하다.
 
     Returns:
-        화면용 항목 dict 목록. 각 항목 키:
+        (items, generated_at)
+        items: 화면용 항목 dict 목록. 각 항목 키:
             stable_id, 공고명, 발주기관, 예산금액, 마감일시, 단계,
             판단상태, 다운로드상태, 첨부URL개수,
             analyzed(파생), field, summary,
-            공고링크, 출처사이트
+            공고링크, 출처사이트,
+            is_new_batch(파생 — 이번 수집 회차 신규 여부)
+        generated_at: 최종 스크랩 실행 일시 문자열 (없으면 "")
     """
     if not _STORE_PATH.exists():
         logger.warning("announcements.json 없음: %s", _STORE_PATH)
-        return []
+        return [], ""
 
     try:
         store = json.loads(_STORE_PATH.read_text(encoding="utf-8"))
     except Exception as e:
         logger.error("announcements.json 로드 실패: %s", e)
-        return []
+        return [], ""
 
+    generated_at = store.get("generated_at", "")
     records = store.get("announcements", {})
     items = []
 
     for sid, rec in records.items():
         analysis = read_analysis(sid)
+        # 판정: 최초수집일시가 이번 수집 실행의 generated_at과 일치하면 신규
+        is_new_batch = bool(
+            generated_at and rec.get("최초수집일시", "") == generated_at
+        )
 
         items.append({
             "stable_id":    sid,
@@ -163,9 +205,10 @@ def load_announcements() -> list[dict]:
             "첨부파일경로":  rec.get("첨부파일경로", ""),
             "변환경로목록":  rec.get("변환경로목록", []),
             "삭제됨":        rec.get("삭제됨", False),
+            "is_new_batch":  is_new_batch,
         })
 
-    return items
+    return items, generated_at
 
 
 def get_record(stable_id: str) -> dict | None:

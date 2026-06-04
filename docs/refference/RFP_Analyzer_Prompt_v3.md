@@ -403,6 +403,23 @@ Section 1-A 분류 결과에 따라:
 - Section 2~9는 Section 1과 동일한 `<div class="section">` 패턴 적용
 - CSS, 클래스명, 구조 태그 변경 금지
 
+### 저장 경로 (필수)
+
+분석이 완료되면 생성한 HTML 아티팩트를 다음 경로에 저장하라:
+
+```
+analysis/{stable_id}/result.html
+```
+
+- `{stable_id}`: 대시보드 공고 식별자. 형식은 `나라장터-{공고번호}`.
+  - 예: `나라장터-R26BK01554166`
+  - 공고번호는 사용자가 분석 요청 시 전달하며, 나라장터 입찰공고 URL의
+    `bidPbancNo` 파라미터 값 또는 `announcements.json`의 `stable_id` 키와 동일하다.
+- 저장 위치는 프로젝트 루트(`D:\02.Dev_Project\webscrap`) 기준 상대경로이다.
+- 파일명은 반드시 `result.html` (고정). 다른 이름 사용 금지.
+- 인코딩: UTF-8.
+- 이 경로에 저장해야 대시보드(`dashboard/app.py`)가 리포트를 인식한다.
+
 ### 분량 관리 (중요)
 
 - 9개 섹션 전체 + HTML 템플릿 채우기는 출력 토큰 한계에 근접할 수 있음

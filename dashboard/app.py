@@ -2,12 +2,15 @@
 dashboard/app.py — 나라장터 대시보드 Flask 로컬 웹앱 (도메인: backend)
 
 엔드포인트:
-    GET  /                          → index.html 서빙
-    GET  /api/announcements         → 화면용 공고 목록(JSON)
-    POST /api/download/<stable_id>  → 백그라운드 다운로드+변환 시작, 즉시 202 반환
-    GET  /api/status/<stable_id>    → 해당 공고 다운로드 상태
-    GET  /api/report/<stable_id>    → 분석 리포트(result.md → HTML 렌더링)
-    GET  /api/pending-analysis      → 분석대기 공고 목록(PDF 경로 포함)
+    GET  /                                    → index.html 서빙
+    GET  /api/announcements                   → 화면용 공고 목록(JSON)
+    POST /api/download/<stable_id>            → 백그라운드 다운로드+변환 시작, 즉시 202 반환
+    GET  /api/status/<stable_id>              → 해당 공고 다운로드 상태
+    GET  /api/report/<stable_id>              → 분석 리포트 HTML 원본 반환
+                                                result.html(신형) 우선, 없으면 구형 result.md → HTML 변환
+    GET  /api/report/<stable_id>/download     → result.html을 파일 첨부(attachment)로 반환
+                                                ※ /api/download (첨부파일 수집용)와는 별개 기능
+    GET  /api/pending-analysis                → 분석대기 공고 목록(PDF 경로 포함)
 
 실행:
     python dashboard/app.py
@@ -25,9 +28,8 @@ import sys
 import threading
 from pathlib import Path
 
-import markdown as _markdown  # pip install markdown (서버사이드 마크다운→HTML 변환)
 import re as _re
-from flask import Flask, jsonify, send_from_directory, abort, request
+from flask import Flask, jsonify, send_from_directory, send_file, abort, request
 
 # ── 경로 설정 ────────────────────────────────────────────────────────────────
 _APP_DIR = Path(__file__).parent.resolve()       # dashboard/
@@ -193,10 +195,22 @@ def api_announcements():
     GET /api/announcements
 
     announcements.json + analysis/ result.md 파생 정보를 합쳐 목록을 반환한다.
+
+    추가 응답 필드:
+        latest_collected_at : 최종 스크랩 실행 일시 (store.generated_at)
+        new_count           : 이번 수집 회차 신규 건수 (is_new_batch == True인 항목 수)
+    각 item에 is_new_batch(bool) 파생 필드 포함.
     """
-    items = datasource.load_announcements()
+    items, generated_at = datasource.load_announcements()
     keywords = datasource.load_search_keywords()
-    return jsonify({"items": items, "total": len(items), "keywords": keywords})
+    new_count = sum(1 for it in items if it.get("is_new_batch"))
+    return jsonify({
+        "items":               items,
+        "total":               len(items),
+        "keywords":            keywords,
+        "latest_collected_at": generated_at,
+        "new_count":           new_count,
+    })
 
 
 @app.route("/api/download/<stable_id>", methods=["POST"])
@@ -280,61 +294,64 @@ def api_report(stable_id: str):
     """
     GET /api/report/<stable_id>
 
-    analysis/{stable_id}/result.md를 읽어 마크다운→HTML로 변환하여 반환한다.
-    result.md가 없으면 404.
+    분석 리포트 HTML 원본을 반환한다.
+
+    탐색 우선순위:
+      1. analysis/{stable_id}/result.html  — 신형 완성형 HTML 리포트
+         변환 없이 원본 HTML 문자열을 그대로 반환한다.
+      2. analysis/{stable_id}/result.md    — 구형 마크다운 리포트 (하위호환)
+         기존 band-aid 보정 + markdown 변환을 적용해 HTML 조각을 반환한다.
+         ※ 구형 파일을 새로 생성하지는 않는다. 기존 데이터 보호 목적.
+
+    result.html / result.md 모두 없으면 404.
 
     응답 JSON:
-        stable_id  : 공고 식별자
-        html       : 렌더링된 HTML 문자열 (탭2 인라인 표시용)
-        summary    : Executive Summary 텍스트 (미리보기용)
-        field      : 사업 분야
+        stable_id     : 공고 식별자
+        html          : 렌더링된 HTML 문자열 (탭2 iframe srcdoc 또는 innerHTML용)
+        report_format : "html" | "md"  (프런트가 렌더 방식을 구분할 때 사용)
+        summary       : Executive Summary 텍스트 (미리보기용)
+        field         : 사업 분야
     """
-    result_path = (
-        _PROJECT_ROOT / "analysis" / stable_id / "result.md"
-    )
-    if not result_path.exists():
-        abort(404, description="분석 결과가 아직 없습니다.")
+    analysis_dir = _PROJECT_ROOT / "analysis" / stable_id
+    html_path    = analysis_dir / "result.html"
+    md_path      = analysis_dir / "result.md"
 
-    try:
-        md_text = result_path.read_text(encoding="utf-8")
-    except Exception as e:
-        logger.error("result.md 읽기 실패 (%s): %s", stable_id, e)
-        abort(500, description="리포트 읽기에 실패했습니다.")
+    # ── 신형: result.html 원본 서빙 ─────────────────────────────────────
+    if html_path.exists():
+        try:
+            html_text = html_path.read_text(encoding="utf-8")
+        except Exception as e:
+            logger.error("result.html 읽기 실패 (%s): %s", stable_id, e)
+            abort(500, description="리포트 읽기에 실패했습니다.")
 
-    # ── 전처리: 구형 형식 감지 후 조건부 보정 ──────────────────────────────
-    # 클린 마크다운(## 헤더 존재, 균일 들여쓰기 없음): 전처리 없이 그대로 변환.
-    # 구형 형식(7-space 균일 들여쓰기 또는 박스 문자 표): 기존 보정 로직 적용.
-    #
-    # 클린 마크다운 판정 기준:
-    #   - "##" 로 시작하는 줄이 1개 이상 존재    (마크다운 헤더)
-    #   - 5칸 이상 들여쓰기로 시작하는 줄이 전체의 30% 미만  (균일 들여쓰기 아님)
-    _BOX_FIRST = set("┌┐└┘├┤┬┴┼│─")
-    _lines_all = md_text.split("\n")
-    _has_md_header = any(ln.startswith("##") for ln in _lines_all)
-    _indented_count = sum(1 for ln in _lines_all if _re.match(r"^ {5,}", ln))
-    _indent_ratio = _indented_count / max(len(_lines_all), 1)
-    _is_clean = _has_md_header and (_indent_ratio < 0.30)
+        analysis = datasource.read_analysis(stable_id)
+        return jsonify({
+            "stable_id":     stable_id,
+            "html":          html_text,
+            "report_format": "html",
+            "summary":       analysis["summary"],
+            "field":         analysis["field"],
+        })
 
-    if _is_clean:
-        # 클린 마크다운: 전처리 없이 그대로 사용. 파이프 표는 tables 확장으로 렌더됨.
-        md_clean = md_text
-    else:
-        # 구형 형식: 기존 band-aid 보정 적용
-        md_lines = _lines_all
+    # ── 구형: result.md → HTML 변환 (하위호환, 기존 데이터 보호) ────────
+    if md_path.exists():
+        try:
+            md_text = md_path.read_text(encoding="utf-8")
+        except Exception as e:
+            logger.error("result.md 읽기 실패 (%s): %s", stable_id, e)
+            abort(500, description="리포트 읽기에 실패했습니다.")
+
+        # 구형 마크다운 band-aid 보정
+        import markdown as _markdown  # noqa: F401 — 구형 파일 처리 시에만 사용
+        _BOX_FIRST = set("┌┐└┘├┤┬┴┼│─")
+        md_lines = md_text.split("\n")
         md_lines = [_re.sub(r"^ {1,8}", "", line) for line in md_lines]
         md_clean = "\n".join(md_lines)
-
-        # '---\nExecutive Summary' → '## Executive Summary'
         md_clean = _re.sub(r"---\s*\n\s*(Executive Summary)", r"## \1", md_clean)
-        # '---\n숫자. 제목' → '## 숫자. 제목'
         md_clean = _re.sub(r"---\s*\n\s*(\d+\.\s)", r"## \1", md_clean)
-        # '▎ 텍스트' → '> 텍스트' (blockquote)
         md_clean = _re.sub(r"^▎\s*", "> ", md_clean, flags=_re.MULTILINE)
-        # '숫자-A. 제목' 형태의 서브섹션 → '### 제목'
         md_clean = _re.sub(r"^(\d+-[A-Z0-9]\.\s)", r"### \1", md_clean, flags=_re.MULTILINE)
 
-        # 박스 드로잉 문자(┌┐└┘├┤┬┴┼│─) 표를 fenced code 블록으로 감싸
-        # 고정폭 폰트로 렌더링한다.
         out_lines = []
         in_box = False
         for line in md_clean.split("\n"):
@@ -354,20 +371,41 @@ def api_report(stable_id: str):
             out_lines.append("```")
         md_clean = "\n".join(out_lines)
 
-    # ── 마크다운 → HTML 변환 ─────────────────────────────────────────────
-    html_body = _markdown.markdown(
-        md_clean,
-        extensions=["tables", "fenced_code"],
+        html_body = _markdown.markdown(md_clean, extensions=["tables", "fenced_code"])
+        analysis = datasource.read_analysis(stable_id)
+        return jsonify({
+            "stable_id":     stable_id,
+            "html":          html_body,
+            "report_format": "md",
+            "summary":       analysis["summary"],
+            "field":         analysis["field"],
+        })
+
+    # ── 리포트 없음 ──────────────────────────────────────────────────────
+    abort(404, description="분석 결과가 아직 없습니다.")
+
+
+@app.route("/api/report/<stable_id>/download")
+def api_report_download(stable_id: str):
+    """
+    GET /api/report/<stable_id>/download
+
+    analysis/{stable_id}/result.html을 파일 첨부(attachment)로 내려준다.
+    사용자가 브라우저에서 "다운로드" 버튼을 클릭할 때 호출된다.
+
+    result.html이 없으면 404.
+    ※ POST /api/download/<stable_id> (첨부파일 수집 트리거)와는 전혀 다른 기능.
+    """
+    html_path = _PROJECT_ROOT / "analysis" / stable_id / "result.html"
+    if not html_path.exists():
+        abort(404, description="다운로드할 result.html이 없습니다. 신형 HTML 리포트만 다운로드 가능합니다.")
+
+    return send_file(
+        str(html_path),
+        mimetype="text/html",
+        as_attachment=True,
+        download_name=f"{stable_id}_report.html",
     )
-
-    analysis = datasource.read_analysis(stable_id)
-
-    return jsonify({
-        "stable_id": stable_id,
-        "html":      html_body,
-        "summary":   analysis["summary"],
-        "field":     analysis["field"],
-    })
 
 
 _VALID_STATUSES = {"미검토", "관심", "참여검토", "제외"}
@@ -448,7 +486,7 @@ def api_pending_analysis():
         ]
         total : 건수
     """
-    all_items = datasource.load_announcements()
+    all_items, _generated_at = datasource.load_announcements()
 
     pending = [
         {
