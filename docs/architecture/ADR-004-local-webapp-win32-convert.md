@@ -51,4 +51,4 @@
 
 ## 관련 문서
 - docs/sessions/2026-06-02.md (분석+웹앱 스펙)
-- docs/ADR-003-json-canonical-store.md (JSON 정본)
+- docs/architecture/ADR-003-json-canonical-store.md (JSON 정본)

@@ -42,4 +42,4 @@ analyzed(bool), 분석경로, 판단상태(미검토|관심|참여검토|제외)
 
 ## 관련 문서
 - docs/sessions/2026-06-02.md (데이터 저장 방식 결정 경위)
-- docs/ADR-002-g2b-v1-pipeline.md (수집 파이프라인)
+- docs/architecture/ADR-002-g2b-v1-pipeline.md (수집 파이프라인)

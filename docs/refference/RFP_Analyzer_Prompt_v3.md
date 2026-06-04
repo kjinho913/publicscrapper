@@ -1,3 +1,5 @@
+> 참고자료 — 프로젝트 정본 아님. 정본: `.claude/agents/rfp-analyzer.md`
+
 # 📋 RFP Analyzer — Optimized Prompt v3.0
 
 <Role>
