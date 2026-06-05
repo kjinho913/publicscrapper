@@ -510,6 +510,8 @@
       font-weight: 600;
       color: #1a1a2e;
       margin-bottom: 8px;
+      display: flex;
+      align-items: center;
     }
 
     .pending-card .pdf-label {
@@ -566,6 +568,75 @@
       padding: 40px;
       color: #888;
       font-size: 14px;
+    }
+
+    /* ── B1: 리포트 카드 삭제 버튼 ── */
+    .report-card-wrap {
+      position: relative;
+    }
+
+    .report-card-del-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 13px;
+      padding: 2px 6px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      color: #9ca3af;
+      border-radius: 4px;
+      line-height: 1;
+      z-index: 2;
+    }
+
+    .report-card-del-btn:hover { color: #dc2626; background: #fef2f2; }
+
+    /* B1: 리포트 뷰어 내 삭제 버튼 */
+    #report-viewer-del-btn {
+      font-size: 12px;
+      padding: 4px 12px;
+      border: 1px solid rgba(255,100,100,0.7);
+      border-radius: 4px;
+      color: #fca5a5;
+      text-decoration: none;
+      background: rgba(220,38,38,0.15);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    #report-viewer-del-btn:hover { background: rgba(220,38,38,0.28); color: #fff; }
+
+    /* ── B2: 분석대기 카드 삭제 버튼 ── */
+    .pending-card-del-btn {
+      font-size: 11px;
+      padding: 2px 8px;
+      border: 1px solid #fca5a5;
+      border-radius: 4px;
+      background: #fff;
+      color: #dc2626;
+      cursor: pointer;
+      white-space: nowrap;
+      float: right;
+      margin-top: -2px;
+    }
+
+    .pending-card-del-btn:hover { background: #fef2f2; }
+
+    /* ── B3: 분석대기 카드 순번 배지 ── */
+    .pending-seq-badge {
+      display: inline-block;
+      min-width: 22px;
+      height: 22px;
+      line-height: 22px;
+      text-align: center;
+      background: #e0e7ff;
+      color: #3730a3;
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 700;
+      margin-right: 6px;
+      flex-shrink: 0;
     }
   </style>
 </head>
@@ -669,6 +740,8 @@
                     border-radius:4px;color:#fff;text-decoration:none;
                     background:rgba(255,255,255,0.12);white-space:nowrap;"
              title="HTML 파일로 저장">&#8595; 다운로드</a>
+          <!-- B1: 리포트 삭제 버튼 — 리포트를 휴지통으로 보내고 분석대기로 복귀 -->
+          <button id="report-viewer-del-btn" style="display:none;" title="리포트 삭제 후 분석대기로 복귀">&#x1F5D1; 리포트 삭제</button>
           <button id="report-close">&#x2715;</button>
         </div>
       </div>
@@ -1299,11 +1372,14 @@ loadData();
 // ══════════════════════════════════════════════════════════════════════════
 // 탭2: 분석 리포트
 // ══════════════════════════════════════════════════════════════════════════
-const API_REPORT          = (id) => `/api/report/${id}`;
+const API_REPORT          = function(id) { return "/api/report/" + id; };
+const API_REPORT_DELETE   = function(id) { return "/api/report/" + id + "/delete"; }; // B1: 리포트 소프트삭제
 const API_PENDING         = "/api/pending-analysis";
 
 // 탭2 클릭 시 데이터 로드 (한 번만)
 let tab2Loaded = false;
+// B1: 현재 뷰어에 열려 있는 stable_id 추적 (삭제 버튼 핸들러에서 사용)
+var _openReportStableId = null;
 
 document.querySelector('[data-tab="tab2"]').addEventListener("click", () => {
   if (!tab2Loaded) {
@@ -1361,19 +1437,38 @@ async function loadTab2() {
 
 // ── 분석완료 카드 목록 렌더 ──────────────────────────────────────────────
 function renderAnalyzedList(items) {
-  const container = document.getElementById("analyzed-list");
+  var container = document.getElementById("analyzed-list");
   container.innerHTML = "";
 
-  items.forEach(item => {
-    const card = document.createElement("div");
+  items.forEach(function(item) {
+    // B1: 카드를 감싸는 wrapper로 삭제 버튼을 absolute 배치
+    var wrap = document.createElement("div");
+    wrap.className = "report-card-wrap";
+
+    var card = document.createElement("div");
     card.className = "report-card";
-    card.innerHTML = `
-      <h3>${escHtml(item["공고명"])}</h3>
-      <div class="card-meta">${escHtml(item["발주기관"] || "")} · ${escHtml(item.field || "분야 미상")} · 마감 ${escHtml(item["마감일시"] || "-")}</div>
-      <div class="card-summary">${escHtml(item.summary || "(요약 없음)")}</div>
-    `;
-    card.addEventListener("click", () => openReport(item.stable_id, item["공고명"]));
-    container.appendChild(card);
+    card.innerHTML =
+      "<h3>" + escHtml(item["공고명"]) + "</h3>" +
+      "<div class=\"card-meta\">" + escHtml(item["발주기관"] || "") + " \xB7 " + escHtml(item.field || "분야 미상") + " \xB7 마감 " + escHtml(item["마감일시"] || "-") + "</div>" +
+      "<div class=\"card-summary\">" + escHtml(item.summary || "(요약 없음)") + "</div>";
+
+    card.addEventListener("click", function() { openReport(item.stable_id, item["공고명"]); });
+
+    // B1: 카드 우상단 삭제 버튼
+    var delBtn = document.createElement("button");
+    delBtn.className = "report-card-del-btn";
+    delBtn.title = "리포트 삭제 후 분석대기로 복귀";
+    delBtn.innerHTML = "&#x1F5D1;";
+    delBtn.addEventListener("click", function(e) {
+      e.stopPropagation(); // 카드 클릭(openReport) 방지
+      var name = item["공고명"] || item.stable_id;
+      if (!confirm("\"" + name + "\"\n이 리포트를 삭제하고 분석 대기로 되돌리겠습니까?\n(리포트 파일은 휴지통으로 이동되어 복원 가능합니다)")) { return; }
+      handleReportDelete(item.stable_id);
+    });
+
+    wrap.appendChild(card);
+    wrap.appendChild(delBtn);
+    container.appendChild(wrap);
   });
 }
 
@@ -1384,10 +1479,14 @@ async function openReport(stableId, title) {
   var viewer    = document.getElementById("report-viewer");
   var iframe    = document.getElementById("report-iframe");
   var dlBtn     = document.getElementById("report-download-btn");
+  var delBtn    = document.getElementById("report-viewer-del-btn"); // B1
+
+  _openReportStableId = stableId; // B1: 현재 열린 stable_id 기록
 
   document.getElementById("report-viewer-title").textContent = title || "(제목 없음)";
   iframe.srcdoc = "<p style='padding:40px;color:#888;font-family:sans-serif;'>리포트를 불러오는 중...</p>";
   dlBtn.style.display = "none";
+  delBtn.style.display = "none"; // 로딩 중에는 숨김
   viewer.style.display = "block";
   viewer.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -1406,69 +1505,165 @@ async function openReport(stableId, title) {
     } else {
       dlBtn.style.display = "none";
     }
+
+    // B1: 리포트가 성공적으로 열렸을 때만 삭제 버튼 표시
+    delBtn.style.display = "inline-block";
   } catch (e) {
     iframe.srcdoc = "<p style='padding:40px;color:#dc2626;font-family:sans-serif;'>리포트 로드 실패: " + escHtml(e.message) + "</p>";
     dlBtn.style.display = "none";
+    delBtn.style.display = "none";
   }
 }
 
-document.getElementById("report-close").addEventListener("click", () => {
+document.getElementById("report-close").addEventListener("click", function() {
   document.getElementById("report-viewer").style.display = "none";
+  _openReportStableId = null;
 });
 
+// B1: 뷰어 내 리포트 삭제 버튼 핸들러
+document.getElementById("report-viewer-del-btn").addEventListener("click", function() {
+  if (!_openReportStableId) { return; }
+  var stableId = _openReportStableId;
+
+  // 공고명 찾기 (allItems에서)
+  var item = allItems.filter(function(i) { return i.stable_id === stableId; })[0];
+  var name = item ? item["공고명"] : stableId;
+
+  if (!confirm("\"" + name + "\"\n이 리포트를 삭제하고 분석 대기로 되돌리겠습니까?\n(리포트 파일은 휴지통으로 이동되어 복원 가능합니다)")) { return; }
+
+  handleReportDelete(stableId);
+});
+
+// B1: 리포트 소프트삭제 핸들러 (분석완료 카드의 삭제 버튼도 이것을 공유)
+async function handleReportDelete(stableId) {
+  try {
+    var resp = await fetch(API_REPORT_DELETE(stableId), { method: "POST" });
+    if (!resp.ok) { throw new Error("HTTP " + resp.status); }
+
+    // 뷰어 닫기
+    document.getElementById("report-viewer").style.display = "none";
+    _openReportStableId = null;
+
+    // allItems에서 해당 항목의 analyzed를 false로, 판단상태를 '분석대기'로 갱신
+    var item = allItems.filter(function(i) { return i.stable_id === stableId; })[0];
+    if (item) {
+      item.analyzed = false;
+      item["판단상태"] = "분석대기";
+      item.summary = "";
+      item.field = "";
+    }
+
+    // 탭2 재로드 (분석완료 목록 갱신 + 분석대기 목록에 복귀 반영)
+    tab2Loaded = false;
+    loadTab2();
+
+    // 탭1 테이블도 갱신 (분석완료 배지 및 판단상태 변경 반영)
+    renderTable();
+  } catch (e) {
+    alert("리포트 삭제 실패: " + e.message);
+  }
+}
+
 // ── 분석대기 카드 목록 렌더 ──────────────────────────────────────────────
+// B2: 각 카드에 소프트삭제 버튼 추가 (기존 /api/announcement/<id>/delete 재사용)
+// B3: 서버가 최신순 정렬해서 반환하므로 프론트는 인덱스 기준 순번(1,2,3…)만 표시
 function renderPendingList(items) {
-  const container = document.getElementById("pending-cards");
+  var container = document.getElementById("pending-cards");
   container.innerHTML = "";
 
   if (items.length === 0) {
-    container.innerHTML = '<div class="pending-empty">분석 대기 공고가 없습니다.</div>';
+    container.innerHTML = "<div class=\"pending-empty\">분석 대기 공고가 없습니다.</div>";
     return;
   }
 
-  items.forEach(item => {
-    const paths = item["변환경로목록"] || [];
-    const pathsHtml = paths.length > 0
-      ? paths.map(p => `
-          <div class="pdf-path-item">
-            <span class="pdf-path-text" title="${escHtml(p)}">${escHtml(p)}</span>
-            <button class="copy-btn" data-path="${escHtml(p)}">복사</button>
-          </div>
-        `).join("")
-      : `<div style="font-size:12px;color:#aaa;">변환된 PDF 없음 (첨부 없는 공고이거나 아직 변환 미완료)</div>`;
+  items.forEach(function(item, idx) {
+    var paths = item["변환경로목록"] || [];
+    var pathsHtml = "";
+    if (paths.length > 0) {
+      pathsHtml = paths.map(function(p) {
+        return "<div class=\"pdf-path-item\">" +
+          "<span class=\"pdf-path-text\" title=\"" + escHtml(p) + "\">" + escHtml(p) + "</span>" +
+          "<button class=\"copy-btn\" data-path=\"" + escHtml(p) + "\">복사</button>" +
+          "</div>";
+      }).join("");
+    } else {
+      pathsHtml = "<div style=\"font-size:12px;color:#aaa;\">변환된 PDF 없음 (첨부 없는 공고이거나 아직 변환 미완료)</div>";
+    }
 
-    const card = document.createElement("div");
+    var card = document.createElement("div");
     card.className = "pending-card";
-    card.innerHTML = `
-      <h4>${escHtml(item["공고명"])}</h4>
-      <div style="margin-bottom:4px;font-size:11px;color:#6b7280;">
-        ID: <code>${escHtml(item["stable_id"])}</code>
-      </div>
-      <div class="pdf-label">분석에 사용할 PDF 경로 (복사 후 Claude Code에 붙여넣기)</div>
-      ${pathsHtml}
-    `;
+
+    // B3: 순번 배지, B2: 삭제 버튼을 h4에 함께 배치
+    card.innerHTML =
+      "<h4>" +
+        "<span class=\"pending-seq-badge\">" + (idx + 1) + "</span>" +
+        "<span style=\"flex:1;\">" + escHtml(item["공고명"]) + "</span>" +
+        // B2: 소프트삭제 버튼 — 기존 /api/announcement/<id>/delete 재사용
+        "<button class=\"pending-card-del-btn\" data-id=\"" + escHtml(item["stable_id"]) + "\">목록에서 제거</button>" +
+      "</h4>" +
+      "<div style=\"margin-bottom:4px;font-size:11px;color:#6b7280;\">" +
+        "ID: <code>" + escHtml(item["stable_id"]) + "</code>" +
+      "</div>" +
+      "<div class=\"pdf-label\">분석에 사용할 PDF 경로 (복사 후 Claude Code에 붙여넣기)</div>" +
+      pathsHtml;
+
+    // B2: 소프트삭제 버튼 이벤트 — 기존 API_DELETE 재사용
+    var delBtn = card.querySelector(".pending-card-del-btn");
+    if (delBtn) {
+      delBtn.addEventListener("click", function() {
+        var sid = delBtn.getAttribute("data-id");
+        var name = item["공고명"] || sid;
+        if (!confirm("\"" + name + "\"\n분석 대기 목록에서 제거하겠습니까?\n(삭제된 항목 보기에서 복원할 수 있습니다)")) { return; }
+        handlePendingDelete(sid, card);
+      });
+    }
 
     // 복사 버튼 이벤트
-    card.querySelectorAll(".copy-btn").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const path = btn.dataset.path;
-        try {
-          await navigator.clipboard.writeText(path);
+    card.querySelectorAll(".copy-btn").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        var path = btn.getAttribute("data-path");
+        navigator.clipboard.writeText(path).then(function() {
           btn.textContent = "복사됨!";
           btn.classList.add("copied");
-          setTimeout(() => {
+          setTimeout(function() {
             btn.textContent = "복사";
             btn.classList.remove("copied");
           }, 1800);
-        } catch (e) {
-          // 클립보드 API 실패 시 fallback: 선택 상태로
+        }).catch(function() {
           btn.textContent = "수동복사";
-        }
+        });
       });
     });
 
     container.appendChild(card);
   });
+}
+
+// B2: 분석대기 공고 소프트삭제 핸들러
+// 기존 /api/announcement/<id>/delete 엔드포인트를 재사용한다.
+async function handlePendingDelete(stableId, cardEl) {
+  try {
+    var resp = await fetch(API_DELETE(stableId), { method: "POST" });
+    if (!resp.ok) { throw new Error("HTTP " + resp.status); }
+
+    // allItems에서 해당 항목 삭제됨 플래그 갱신
+    var item = allItems.filter(function(i) { return i.stable_id === stableId; })[0];
+    if (item) { item["삭제됨"] = true; }
+
+    // 카드 즉시 제거 (탭2 재로드 없이 부드럽게)
+    if (cardEl && cardEl.parentNode) {
+      cardEl.parentNode.removeChild(cardEl);
+    }
+
+    // 남은 카드의 순번 재계산: 카드 제거 후 남은 seq-badge를 1부터 다시 번호 매김
+    var remaining = document.querySelectorAll("#pending-cards .pending-seq-badge");
+    remaining.forEach(function(badge, i) { badge.textContent = i + 1; });
+
+    // 탭1 테이블 갱신 (삭제됨 상태 반영)
+    renderTable();
+  } catch (e) {
+    alert("제거 실패: " + e.message);
+  }
 }
 </script>
 </body>

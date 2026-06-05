@@ -385,6 +385,68 @@ def api_report(stable_id: str):
     abort(404, description="분석 결과가 아직 없습니다.")
 
 
+@app.route("/api/report/<stable_id>/delete", methods=["POST"])
+def api_report_delete(stable_id: str):
+    """
+    POST /api/report/<stable_id>/delete                          ← B1: 리포트 소프트삭제
+
+    ※ POST /api/announcement/<stable_id>/delete (공고 자체 소프트삭제)와 의미가 다름.
+       이 엔드포인트는 '리포트 파일만' 삭제하고 공고 레코드는 유지한다.
+       삭제된 리포트는 analysis/_trash/{stable_id}/ 로 이동(복원 가능).
+
+    동작:
+      1. analysis/{stable_id}/ 폴더를 analysis/_trash/{stable_id}/ 로 이동한다.
+         - result.html / result.md / meta.json 모두 포함 이동.
+         - _trash/{stable_id}/ 가 이미 있으면 덮어쓰기(타임스탬프 접미사 없이 단순 이동).
+      2. announcements.json 레코드 갱신:
+         - analyzed = False
+         - 분석경로 = ""
+         - 판단상태 = "분석대기"   (다운로드 상태는 "ready"로 유지 → 재다운로드 없이 재분석 가능)
+
+    복원 방법(수동): analysis/_trash/{stable_id}/ 를 analysis/{stable_id}/ 로 되돌린다.
+    """
+    analysis_dir = _PROJECT_ROOT / "analysis" / stable_id
+    trash_parent = _PROJECT_ROOT / "analysis" / "_trash"
+    trash_dir    = trash_parent / stable_id
+
+    # 리포트 폴더가 없으면 그냥 404 — 이미 없는 상태
+    if not analysis_dir.exists():
+        abort(404, description=f"분석 결과 폴더가 없습니다: {stable_id}")
+
+    rec = datasource.get_record(stable_id)
+    if rec is None:
+        abort(404, description=f"공고를 찾을 수 없습니다: {stable_id}")
+
+    try:
+        import shutil as _shutil
+        trash_parent.mkdir(parents=True, exist_ok=True)
+        # 이전 휴지통 항목이 있으면 먼저 제거 후 이동 (shutil.move는 dest 폴더가 있으면
+        # 그 안으로 들어가므로 명시적으로 삭제 후 이동)
+        if trash_dir.exists():
+            _shutil.rmtree(str(trash_dir))
+        _shutil.move(str(analysis_dir), str(trash_dir))
+        logger.info("[REPORT-DELETE] 리포트 휴지통 이동: %s → %s", analysis_dir, trash_dir)
+    except Exception as e:
+        logger.error("[REPORT-DELETE] 파일 이동 실패 (%s): %s", stable_id, e, exc_info=True)
+        abort(500, description=f"리포트 파일 이동 실패: {e}")
+
+    # announcements.json 갱신: 분석 전 상태로 되돌림
+    # json_store의 _IMMUTABLE_FIELDS에 analyzed/분석경로/판단상태가 포함되어 있지만,
+    # 대시보드는 _update_record(직접 읽기-수정-쓰기)를 사용하므로 보존 정책에 구애받지 않는다.
+    _update_record(stable_id, {
+        "analyzed":  False,
+        "분석경로":  "",
+        "판단상태":  "분석대기",
+    })
+    logger.info("[REPORT-DELETE] 레코드 갱신(분석대기 복귀): %s", stable_id)
+
+    return jsonify({
+        "stable_id": stable_id,
+        "message":   "리포트를 삭제하고 분석 대기 상태로 복귀했습니다.",
+        "trash_dir": str(trash_dir),
+    }), 200
+
+
 @app.route("/api/report/<stable_id>/download")
 def api_report_download(stable_id: str):
     """
@@ -488,16 +550,24 @@ def api_pending_analysis():
     """
     all_items, _generated_at = datasource.load_announcements()
 
+    # B2: 삭제됨=True인 공고는 분석 대기 목록에서 제외한다.
+    # (api_announcement/<id>/delete 의 소프트삭제 인프라 재사용)
     pending = [
         {
             "stable_id":    item["stable_id"],
             "공고명":        item["공고명"],
             "첨부파일경로":  item.get("첨부파일경로", ""),
             "변환경로목록":  item.get("변환경로목록", []),
+            "최초수집일시":  item.get("최초수집일시", ""),
         }
         for item in all_items
-        if item.get("판단상태") == "분석대기" and not item.get("analyzed", False)
+        if item.get("판단상태") == "분석대기"
+           and not item.get("analyzed", False)
+           and not item.get("삭제됨", False)     # ← 소프트삭제된 공고 제외
     ]
+
+    # B3: 분석 대기 목록을 최신순(최초수집일시 내림차순)으로 정렬
+    pending.sort(key=lambda x: x.get("최초수집일시", ""), reverse=True)
 
     return jsonify({"items": pending, "total": len(pending)})
 

@@ -206,6 +206,7 @@ def load_announcements() -> tuple[list[dict], str]:
             "변환경로목록":  rec.get("변환경로목록", []),
             "삭제됨":        rec.get("삭제됨", False),
             "is_new_batch":  is_new_batch,
+            "최초수집일시":  rec.get("최초수집일시", ""),  # B3 정렬용
         })
 
     return items, generated_at
