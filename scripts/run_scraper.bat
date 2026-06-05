@@ -1,7 +1,14 @@
 @echo off
-chcp 65001 >nul
-REM run_scraper.bat - Run scraper with optional additional keywords
-REM Saved as UTF-8 (no BOM); chcp 65001 enforced above for Korean prompts/input
+setlocal enabledelayedexpansion
+
+REM run_scraper.bat - Web scraper launcher
+REM
+REM Usage:
+REM   run_scraper.bat                          Interactive prompts for keyword and days
+REM   run_scraper.bat --days 30               Pass args directly, no prompts
+REM   run_scraper.bat --keyword AI --days 90  Pass args directly, no prompts
+REM
+REM NOTE: This file is 100% ASCII. Do not add non-ASCII characters.
 
 REM Change to project root (one level up from scripts\)
 cd /d "%~dp0.."
@@ -11,14 +18,25 @@ set PYTHON=python
 if exist ".venv\Scripts\python.exe" set PYTHON=.venv\Scripts\python.exe
 if not exist ".venv\Scripts\python.exe" if exist "scraper\.venv\Scripts\python.exe" set PYTHON=scraper\.venv\Scripts\python.exe
 
-REM Prompt for extra keywords (Korean input OK on UTF-8 console)
-set ADD_KW=
-set /p ADD_KW="추가 검색어 입력 (쉼표 구분, 없으면 Enter): "
+REM Branch: if no args given, run interactive; otherwise pass args through
+if "%~1"=="" goto INTERACTIVE
+goto ARGS
 
-if "%ADD_KW%"=="" (
-    "%PYTHON%" scraper\main.py --once
-) else (
-    "%PYTHON%" scraper\main.py --once --add-keywords "%ADD_KW%"
-)
+:INTERACTIVE
+set EXTRA=
+set USER_KEYWORD=
+set USER_DAYS=
+set /p USER_KEYWORD=Search keyword [Enter=default]:
+set /p USER_DAYS=Lookback days [Enter=default]:
+if not "!USER_KEYWORD!"=="" set EXTRA=!EXTRA! --keyword "!USER_KEYWORD!"
+if not "!USER_DAYS!"=="" set EXTRA=!EXTRA! --days !USER_DAYS!
+goto RUN
+
+:ARGS
+set EXTRA= %*
+goto RUN
+
+:RUN
+"%PYTHON%" scraper\main.py --once!EXTRA!
 
 pause

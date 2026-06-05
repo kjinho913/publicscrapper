@@ -60,6 +60,10 @@ PRE_STANDARD_DETAIL_BASE = "https://www.g2b.go.kr/pn/pnz/pnza/pubPrcureThng/deta
 NUM_OF_ROWS = 100   # 페이지당 최대 100건
 MAX_PAGES = 10      # 페이지네이션 최대 10페이지 (최대 1,000건)
 
+# 나라장터 API 1회 조회 기간 상한 — 보수적으로 30일로 설정.
+# --days 값이 이 한계를 초과하면 자동으로 청크 분할 조회함.
+_CHUNK_DAYS = 30
+
 
 class G2bScraper(BaseScraper):
     SOURCE_NAME = "나라장터"
@@ -86,7 +90,12 @@ class G2bScraper(BaseScraper):
     # ──────────────────────────────────────────────────────────────────────
 
     def fetch_list(self) -> list[dict]:
-        """키워드 × 단계 조합으로 PPSSrch를 호출하고, 중복을 제거해 반환한다."""
+        """키워드 × 단계 × 날짜 청크 조합으로 PPSSrch를 호출하고, 중복을 제거해 반환한다.
+
+        date_range_days가 _CHUNK_DAYS(30일)를 초과하면 30일 단위 구간으로 분할해
+        각 구간을 별도 API 호출로 처리한다. 청크 간 중복은 _deduplicate()가 처리하므로
+        경계 겹침이 있어도 무방하다.
+        """
         if not self.api_key:
             logger.error("[G2B] API 키 없음, 건너뜀")
             return []
@@ -100,41 +109,48 @@ class G2bScraper(BaseScraper):
             )
             return []
 
-        today = datetime.now()
-        start = (today - timedelta(days=self._date_range_days)).strftime("%Y%m%d") + "0000"
-        end   = today.strftime("%Y%m%d") + "2359"
+        # 날짜 청크 목록 생성 — date_range_days가 _CHUNK_DAYS 이하면 청크 1개
+        chunks = _build_date_chunks(self._date_range_days, _CHUNK_DAYS)
+        if len(chunks) > 1:
+            logger.info(
+                "[G2B] 수집 기간 %d일 → %d개 청크로 분할 (청크당 최대 %d일)",
+                self._date_range_days, len(chunks), _CHUNK_DAYS,
+            )
 
         all_items: list[dict] = []
 
-        if self._do_bid_notice:
-            logger.info("[G2B] 입찰공고 수집 시작 (키워드 %d개)", len(self._search_keywords))
-            for kw in self._search_keywords:
-                items = self._fetch_stage_all_pages(
-                    url=BID_NOTICE_URL,
-                    search_param="bidNtceNm",
-                    keyword=kw,
-                    start=start,
-                    end=end,
-                    parser=self._parse_bid_item,
-                    stage_label="입찰공고",
-                )
-                all_items.extend(items)
+        for chunk_idx, (start, end) in enumerate(chunks, start=1):
+            chunk_label = f"청크{chunk_idx}/{len(chunks)} ({start[:8]}~{end[:8]})"
 
-        if self._do_pre_standard:
-            logger.info("[G2B] 사전규격 수집 시작 (키워드 %d개)", len(self._search_keywords))
-            for kw in self._search_keywords:
-                items = self._fetch_stage_all_pages(
-                    url=PRE_STANDARD_URL,
-                    search_param="prdctClsfcNoNm",
-                    keyword=kw,
-                    start=start,
-                    end=end,
-                    parser=self._parse_prestandard_item,
-                    stage_label="사전규격",
-                )
-                all_items.extend(items)
+            if self._do_bid_notice:
+                logger.info("[G2B] 입찰공고 수집 시작 (키워드 %d개, %s)", len(self._search_keywords), chunk_label)
+                for kw in self._search_keywords:
+                    items = self._fetch_stage_all_pages(
+                        url=BID_NOTICE_URL,
+                        search_param="bidNtceNm",
+                        keyword=kw,
+                        start=start,
+                        end=end,
+                        parser=self._parse_bid_item,
+                        stage_label="입찰공고",
+                    )
+                    all_items.extend(items)
 
-        # (공고번호, 단계) 기준 중복 제거 — 같은 공고를 여러 키워드로 잡았을 때 처리
+            if self._do_pre_standard:
+                logger.info("[G2B] 사전규격 수집 시작 (키워드 %d개, %s)", len(self._search_keywords), chunk_label)
+                for kw in self._search_keywords:
+                    items = self._fetch_stage_all_pages(
+                        url=PRE_STANDARD_URL,
+                        search_param="prdctClsfcNoNm",
+                        keyword=kw,
+                        start=start,
+                        end=end,
+                        parser=self._parse_prestandard_item,
+                        stage_label="사전규격",
+                    )
+                    all_items.extend(items)
+
+        # (공고번호, 단계) 기준 중복 제거 — 같은 공고를 여러 키워드/청크에서 잡았을 때 처리
         deduped = _deduplicate(all_items)
         logger.info(
             "[G2B] 합산 %d건 → 중복제거 후 %d건",
@@ -347,6 +363,39 @@ class G2bScraper(BaseScraper):
 
 
 # ── 헬퍼 함수 ────────────────────────────────────────────────────────────
+
+def _build_date_chunks(total_days: int, chunk_days: int) -> list[tuple[str, str]]:
+    """오늘 기준 total_days 전부터 오늘까지의 기간을 chunk_days 단위 구간 목록으로 반환한다.
+
+    각 구간은 ("YYYYMMDDHHMM", "YYYYMMDDHHMM") 형식의 튜플.
+    구간은 오래된 날짜에서 최신 날짜 순으로 정렬된다.
+    total_days <= chunk_days 이면 구간이 1개만 반환된다.
+
+    예) total_days=90, chunk_days=30 → 3개 구간
+        [(61일전~31일전), (31일전~1일전), (1일전~오늘)]
+    """
+    today = datetime.now()
+    chunks: list[tuple[str, str]] = []
+
+    # chunk_start_days: 현재 청크의 시작 오프셋 (오늘 기준 며칠 전인지)
+    chunk_start_days = total_days
+
+    while chunk_start_days > 0:
+        chunk_end_days = chunk_start_days - chunk_days
+        if chunk_end_days < 0:
+            chunk_end_days = 0
+
+        start_dt = today - timedelta(days=chunk_start_days)
+        end_dt   = today - timedelta(days=chunk_end_days)
+
+        start_str = start_dt.strftime("%Y%m%d") + "0000"
+        end_str   = end_dt.strftime("%Y%m%d") + "2359"
+
+        chunks.append((start_str, end_str))
+        chunk_start_days = chunk_end_days
+
+    return chunks
+
 
 def _deduplicate(items: list[dict]) -> list[dict]:
     """(공고번호, _단계) 기준으로 중복을 제거한다. 먼저 나온 항목을 유지."""

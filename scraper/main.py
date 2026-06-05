@@ -10,6 +10,19 @@
   python main.py --once
   python main.py --schedule
 
+  # 1회성 런타임 오버라이드 (--days, --keyword)
+  #   --days N       : 이번 실행만 수집 기간을 N일로 변경 (g2b 전용)
+  #                    넓은 기간(30일 초과)은 자동으로 30일 청크로 분할 조회
+  #   --keyword KW   : 이번 실행만 검색 키워드를 KW로 대체 (g2b 전용, 반복 가능)
+  #                    config의 search_keywords를 완전히 대체한다 (추가가 아님)
+  #
+  #   예: python main.py --g2b --days 90 --keyword 인공지능 --keyword AI
+  #       python main.py --once --days 7
+  #       python main.py --once --keyword 클라우드 --keyword 빅데이터
+  #
+  #   주의: 두 인자는 g2b(나라장터)에만 적용됨. 다른 사이트는 영향 없음.
+  #         config.yaml 파일은 절대 변경되지 않음 (메모리 오버라이드만 적용).
+
   # 디버그
   python main.py --debug-nipa
   python main.py --debug-detail nipa <url>
@@ -160,8 +173,37 @@ def main() -> None:
         "--add-keywords",
         default="",
         metavar="KEYWORDS",
-        help="기본 검색어에 추가할 키워드 (쉼표 구분, 인메모리 병합 — config.yaml 변경 없음)",
+        help="기본 검색어에 추가할 키워드 (쉼표 구분, 인메모리 병합, config.yaml 변경 없음)",
     )
+
+    override_group = parser.add_argument_group(
+        "1회성 런타임 오버라이드 (g2b 전용, config.yaml 파일 변경 없음)"
+    )
+    override_group.add_argument(
+        "--days",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "이번 실행만 수집 기간을 N일로 변경 (g2b 전용). "
+            "미지정 시 config의 g2b.date_range_days 사용. "
+            "30일 초과 시 자동으로 30일 청크로 분할 조회."
+        ),
+    )
+    override_group.add_argument(
+        "--keyword",
+        action="append",
+        dest="keywords",
+        default=None,
+        metavar="KW",
+        help=(
+            "이번 실행만 검색 키워드를 지정한 값으로 대체 (g2b 전용, 반복 가능). "
+            "예: --keyword 인공지능 --keyword AI. "
+            "미지정 시 config의 g2b.search_keywords 사용. "
+            "config의 기본 키워드를 완전히 대체함 (추가가 아님)."
+        ),
+    )
+
     args = parser.parse_args()
 
     config = load_config(Path(args.config))
@@ -176,6 +218,18 @@ def main() -> None:
                 existing.append(kw)
         logging.basicConfig(level=logging.INFO, format="%(message)s")
         logging.getLogger("main").info("[G2B] 검색어(기본+추가): %s", existing)
+
+    # --days / --keyword: 인메모리 오버라이드 (config.yaml 파일에는 절대 저장하지 않음)
+    g2b_cfg = config.setdefault("sites", {}).setdefault("g2b", {})
+    if args.days is not None:
+        g2b_cfg["date_range_days"] = args.days
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
+        logging.getLogger("main").info("[G2B] 수집 기간 오버라이드: %d일 (config 기본값 무시)", args.days)
+    if args.keywords is not None:
+        # config의 search_keywords를 이번 실행만 완전 대체 (추가 아님)
+        g2b_cfg["search_keywords"] = [kw.strip() for kw in args.keywords if kw.strip()]
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
+        logging.getLogger("main").info("[G2B] 검색어 오버라이드: %s (config 기본값 무시)", g2b_cfg["search_keywords"])
 
     # 디버그 모드 (로깅 설정 불필요)
     if args.debug_detail:
